@@ -1,0 +1,5 @@
+mount_data()
+{
+	mountpoint -q data && return
+	mount -t tmpfs tmpfs data
+}

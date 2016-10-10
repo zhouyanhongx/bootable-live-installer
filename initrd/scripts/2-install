@@ -1,0 +1,187 @@
+ERR_INST_MEDIA=1
+ERR_INV_INPUT=2
+ERR_USR_PART_ABRT=3
+
+handle_install_error()
+{
+	echo -n "ANDROID-IA installation failed. "
+
+	case $1 in
+	$ERR_INST_MEDIA)
+		echo "Failed to find installation media !!"
+		;;
+	$ERR_INV_INPUT)
+		echo "User failed to give valid input !!"
+		;;
+	$ERR_USR_PART_ABRT)
+		echo "User aborted partitioning !!"
+		;;
+	esac
+
+	echo -n "Press ENTER to run live version."
+	read
+
+	return 255
+}
+
+device=
+boot=
+system=
+select_device()
+{
+	# Select the install device
+	retry=3;
+	devlist=`ls /sys/block | grep -v -E "loop|ram|sr|boot"`
+
+	while [ $retry -gt 0 ]; do
+		i=0
+		list=
+		for d in $devlist; do
+			root=`echo $ROOT | grep -o sd[a-z]`
+			if [ $root == $d ]; then
+				continue
+			fi
+
+			i=$(( i + 1 ))
+			echo $i. $d
+			list="$list$d "
+		done
+
+		if [ $i -eq 0 ];then
+			return $ERR_INST_MEDIA
+		fi
+
+		retry=$(( retry - 1 ))
+		echo -n "Select the device to install: "
+		read ans
+		if [ $ans -gt 0 -a $ans -le $i ]; then
+			device=`echo $list | cut -d" " -f$ans`
+			return 0
+		else
+			echo "Input is not a valid number"; echo
+		fi
+	done
+
+	return $ERR_INV_INPUT
+}
+
+prepare_partition()
+{
+	echo -n "Auto partitioning /dev/$device. All data will be lost. Continue (y/[n]): "
+	read ans
+	if [ "$ans" != "y" ]; then
+		return $ERR_USR_PART_ABRT
+	fi
+
+	echo -n "Are you sure (y/[n]): "
+	read ans
+	if [ "$ans" != "y" ]; then
+		return $ERR_USR_PART_ABRT
+	fi
+
+	# unmount if already mounted
+	mntpt=`mount | grep /dev/$device | cut -d" " -f3`
+	if [ "$mntpt" != "" ]; then
+		for m in $mntpt; do
+			umount $m
+		done
+	fi
+
+	dd if=/dev/zero of=/dev/$device bs=512 count=2048
+
+	fdisk -u -b 2048 /dev/$device << _PART
+	o
+	n
+	p
+	1
+	2048
+	67583
+	n
+	p
+	2
+	67584
+
+	a
+	1
+	p
+	w
+_PART
+
+	boot=/dev/"$device"1
+	system=/dev/"$device"2
+
+	# Format the partitions
+	mkfs.fat -n EFI $boot
+	mkfs.ext4 -L Android-IA $system
+}
+
+show_progress()
+{
+	pid=$1
+	scnt=$2
+	dir=$3
+
+	echo "Installing system image."
+
+	while [ -d "/proc/$pid" ]; do
+		dcnt=`find $dir | wc -l`
+		per=$(( $(( $dcnt / $scnt)) * 100 ))
+		echo -n "#"
+		sleep 1
+	done
+
+	echo " ... Done."
+}
+
+do_actual_install()
+{
+	# Install GRUB2
+	echo -n "Installing grub2 ... "
+	mount $boot /scratchpad
+	cp -dprf /mnt/boot /mnt/efi /mnt/kernel /mnt/initrd.img /mnt/ramdisk.img /scratchpad
+
+	# update grub entries
+	cat /proc/cmdline > .file
+	sed -i 's/INSTALL=1//' .file
+	cmdline=`cat .file`; rm .file
+
+	echo "set timeout=10" > /scratchpad/boot/grub/grub.cfg
+
+	echo "menuentry 'Android-IA Boot' --class android-ia {" >> /scratchpad/boot/grub/grub.cfg
+	echo "linux /kernel $cmdline quiet" >> /scratchpad/boot/grub/grub.cfg
+	echo "initrd /initrd.img" >> /scratchpad/boot/grub/grub.cfg
+	echo "}" >> /scratchpad/boot/grub/grub.cfg
+
+	echo "" >> /scratchpad/boot/grub/grub.cfg
+
+	echo "menuentry 'Android-IA Boot (w/ Serial' --class android-ia {" >> /scratchpad/boot/grub/grub.cfg
+	echo "linux /kernel $cmdline ignore_loglevel debug console=tty0 console=ttyS0,115200n8" >> /scratchpad/boot/grub/grub.cfg
+	echo "initrd /initrd.img" >> /scratchpad/boot/grub/grub.cfg
+	echo "}" >> /scratchpad/boot/grub/grub.cfg
+
+	sync
+	umount /scratchpad
+	echo "Done."
+
+
+	# Install Android System
+	mount $system /scratchpad
+	fcnt=`find /newroot/system | wc -l`
+	cp -dprf /newroot/system /scratchpad &
+
+	show_progress $! $fcnt /scratchpad
+
+	echo -n "Syncing ... "
+	sync
+	echo "Done."
+	umount /scratchpad
+}
+
+do_install()
+{
+	select_device || handle_install_error $? || return $?
+
+	prepare_partition $device || handle_install_error $? || return $?
+
+	do_actual_install || handle_install_error $? || return $?
+}

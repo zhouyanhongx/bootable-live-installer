@@ -1,0 +1,40 @@
+LOCAL_PATH := $(call my-dir)
+include $(CLEAR_VARS)
+
+LOCAL_MODULE := install_mbr
+LOCAL_SRC_FILES := editdisklbl/editdisklbl.c
+LOCAL_CFLAGS := -O2 -g -W -Wall -Werror# -D_LARGEFILE64_SOURCE
+LOCAL_STATIC_LIBRARIES := libdiskconfig_host libcutils liblog
+install_mbr := $(HOST_OUT_EXECUTABLES)/$(LOCAL_MODULE)
+include $(BUILD_HOST_EXECUTABLE)
+
+TARGET_INITRD_DIR := $(PRODUCT_OUT)/initrd
+LOCAL_INITRD_DIR := $(LOCAL_PATH)/initrd
+BOOT_DIR := $(LOCAL_PATH)/boot
+INITRD := $(PRODUCT_OUT)/initrd.img
+$(INITRD): $(wildcard $(LOCAL_PATH)/initrd/*/*) | $(MKBOOTFS)
+	rm -rf $(TARGET_INITRD_DIR)
+	$(ACP) -dprf $(LOCAL_INITRD_DIR) $(TARGET_INITRD_DIR)
+	mkdir -p $(addprefix $(TARGET_INITRD_DIR)/,mnt proc sys tmp dev etc lib newroot sbin usr/bin usr/sbin scratchpad)
+	$(MKBOOTFS) $(TARGET_INITRD_DIR) | gzip -9 > $@
+
+# 1. Compute the disk file size need in blocks for a block size of 1M
+# 2. Prepare a vfat disk file and copy necessary files
+# 3. Copy GRUB2 files
+ANDROID_IA-EFI := $(PRODUCT_OUT)/$(TARGET_PRODUCT).img
+DISK_LAYOUT := $(LOCAL_PATH)/editdisklbl/disk_layout.conf
+$(ANDROID_IA-EFI): $(addprefix $(PRODUCT_OUT)/,initrd.img kernel ramdisk.img system.img) | $(install_mbr)
+	blksize=0; \
+	for size in `du -sBM $^ | awk '{print $$1}' | cut -d'M' -f1`; do \
+		blksize=$$(($$blksize + $$size)); \
+	done; \
+	blksize=$$(($$(($$blksize + 8)) * 1024));	\
+	rm -f $@.fat; mkdosfs -n ANDROID-IA -C $@.fat $$blksize
+	mcopy -Qsi $@.fat $(BOOT_DIR)/* $^ ::
+	sed "s|KERNEL_CMDLINE|$(BOARD_KERNEL_CMDLINE)|" $(BOOT_DIR)/boot/grub/grub.cfg > $(@D)/grub.cfg
+	mcopy -Qoi $@.fat $(@D)/grub.cfg ::boot/grub
+	cat /dev/null > $@; $(install_mbr) -l $(DISK_LAYOUT) -i $@ oand=$@.fat
+	rm -f $@.fat
+
+.PHONY: android_ia-efi
+android_ia-efi: $(ANDROID_IA-EFI)

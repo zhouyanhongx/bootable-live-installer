@@ -1,0 +1,6 @@
+load_ext_modules()
+{
+	for m in $EXTMOD; do
+		busybox modprobe $m
+	done
+}

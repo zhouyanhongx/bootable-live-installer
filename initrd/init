@@ -1,0 +1,164 @@
+#!/bin/busybox sh
+
+PATH=/sbin:/bin:/usr/bin:/usr/sbin:/system/bin:/system/xbin; export PATH
+
+# Mount things needed by this script
+busybox mount -t proc proc /proc
+busybox mount -t sysfs sys /sys
+
+# install busybox applets as symlinks
+busybox --install -s
+
+# populate /dev
+echo /sbin/mdev > /proc/sys/kernel/hotplug
+mdev -s
+sleep 3
+mkdir -p /dev/block
+
+echo 0 > /proc/sys/kernel/printk
+
+find_root()
+{
+	# Check the device node
+	if [ ! -e $1 ]; then
+	   return 1
+	fi
+
+	blk=`basename $1`
+	if [ ! -e /dev/block/$blk ]; then
+		ln $1 /dev/block
+	fi
+
+	dev=/dev/block/$blk
+	echo "Finding root in - $dev"
+
+	# try mounting it and verify needed files
+	mount $dev /mnt || return 1
+
+	if [ ! -e /mnt/ramdisk.img ]; then
+		umount /mnt
+		return 1
+	fi
+
+	export ROOT=$blk
+
+	zcat /mnt/ramdisk.img | cpio -id
+
+	if [ -e /mnt/system.img ]; then
+		mount -o loop /mnt/system.img system
+		found=1
+	else
+		found=2
+	fi
+
+	mkdir -p mnt
+}
+
+find_system()
+{
+	# Check the device node
+	if [ ! -e $1 ]; then
+	   return 1
+	fi
+
+	blk=`basename $1`
+	if [ ! -e /dev/block/$blk ]; then
+		ln $1 /dev/block
+	fi
+
+	dev=/dev/block/$blk
+	echo "Finding system in - $dev"
+
+	mkdir -p /mnt2
+
+	# try mounting it and verify needed files
+	mount $dev /mnt2 || return 1
+
+	if [ -d /mnt2/system ]; then
+		mount --bind /mnt2/system system
+		found=1
+	else
+		umount /mnt2
+		return 1
+	fi
+
+	if [ -d /mnt2/data ]; then
+		mount --bind /mnt2/data data
+	fi
+
+	hash -r
+}
+
+goto_shell()
+{
+		echo "($1) ... dropping to busybox ash."
+		sh 2>&1
+}
+
+load_kernel_modules()
+{
+        modules_dir=/tmp/loadmodules
+        echo 'loadmodules() { while read dev; do case $dev in' > $modules_dir
+        sort -r /lib/modules/`uname -r`/modules.alias | \
+               sed -n 's/^alias  *\([^ ]*\)  *\(.*\)/\1)modprobe \2;;/p' >> $modules_dir
+        echo 'esac; done; }' >> $modules_dir
+        source $modules_dir
+        cat /sys/bus/*/devices/*/modalias | loadmodules
+}
+
+mount -t tmpfs tmpfs /newroot
+cd /newroot
+found=0
+for d in `ls /dev/sd*[1-9]`; do
+	find_root $d && break
+done
+
+if [ $found -eq 0 ]; then
+	goto_shell find-root-fail
+elif [ $found -eq 2 ]; then
+	found=0
+	for d in `ls /dev/sd*[1-9]`; do
+		find_system $d && break
+	done
+fi
+
+if [ $found -eq 0 ]; then
+	goto_shell find-system-fail
+fi
+
+ln -s newroot/system /
+ln -s ../system/lib/firmware ../system/lib/modules /lib
+
+# load scripts
+for s in `ls /scripts/*`; do
+	test -e "$s" && source $s
+done
+
+load_kernel_modules
+
+if [ -n "$DEBUG" ]; then
+	goto_shell debug-shell
+fi
+
+if [ -n "$INSTALL" ]; then
+	do_install || goto_shell install-failed
+
+	echo -n "Rebooting in 3 .. ";sleep 1
+	echo -n "2 .. "; sleep 1
+	echo "1"; sleep 1
+	reboot -f
+fi
+
+load_ext_modules
+mount_data
+
+# Disable mdev before switching to Android.
+# It conflicts with Android's init
+echo > /proc/sys/kernel/hotplug
+
+export ANDROID_ROOT=/system
+
+exec switch_root /newroot /init
+
+# avoid kernel panic
+goto_shell fatal-err
