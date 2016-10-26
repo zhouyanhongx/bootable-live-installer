@@ -1,6 +1,7 @@
 ERR_INST_MEDIA=1
 ERR_INV_INPUT=2
 ERR_USR_PART_ABRT=3
+ERR_UPGRADE_ABORT=4
 
 handle_install_error()
 {
@@ -15,6 +16,9 @@ handle_install_error()
 		;;
 	$ERR_USR_PART_ABRT)
 		echo "User aborted partitioning !!"
+		;;
+	$ERR_UPGRADE_ABORT)
+		echo "User aborted upgrade !!"
 		;;
 	esac
 
@@ -37,8 +41,7 @@ select_device()
 		i=0
 		list=
 		for d in $devlist; do
-			root=`echo $ROOT | grep -o sd[a-z]`
-			if [ $root == $d ]; then
+			if [ $ROOT == $d ]; then
 				continue
 			fi
 
@@ -56,6 +59,13 @@ select_device()
 		read ans
 		if [ $ans -gt 0 -a $ans -le $i ]; then
 			device=`echo $list | cut -d" " -f$ans`
+			if [ "$device" == "$SYSTEM" ]; then
+				echo -n "Already found android-ia installed on $SYSTEM. Upgrade ? (y/n) :"
+				read upg
+				if [ $upg != "y" ]; then
+					return $ERR_UPGRADE_ABORT
+				fi
+			fi
 			return 0
 		else
 			echo "Input is not a valid number"; echo
@@ -107,8 +117,14 @@ prepare_partition()
 	w
 _PART
 
-	boot=/dev/"$device"1
-	system=/dev/"$device"2
+	ismmc=`echo $device | grep mmcblk`
+	if [ -n "$ismmc" ]; then
+		boot=/dev/"$device"p1
+		system=/dev/"$device"p2
+	else
+		boot=/dev/"$device"1
+		system=/dev/"$device"2
+	fi
 
 	# Format the partitions
 	mkfs.fat -n EFI $boot
@@ -142,7 +158,7 @@ do_actual_install()
 
 	# update grub entries
 	cat /proc/cmdline > .file
-	sed -i 's/INSTALL=1//' .file
+	sed -i 's/INSTALL=1//; s/LIVE=1//' .file
 	cmdline=`cat .file`; rm .file
 
 	echo "set timeout=10" > /scratchpad/boot/grub/grub.cfg

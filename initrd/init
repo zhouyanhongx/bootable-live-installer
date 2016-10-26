@@ -30,25 +30,32 @@ find_root()
 	fi
 
 	dev=/dev/block/$blk
-	echo "Finding root in - $dev"
 
 	# try mounting it and verify needed files
-	mount $dev /mnt || return 1
+	mount $dev /mnt 2> /dev/null || return 1
 
 	if [ ! -e /mnt/ramdisk.img ]; then
 		umount /mnt
 		return 1
 	fi
 
-	export ROOT=$blk
+	if [ -n "$LIVE" ]; then
+		# should find system.img
+		if [ ! -e /mnt/system.img ]; then
+			umount /mnt
+			found=0
+			return 1
+		fi
+	fi
+
+	found=1
+
+	export ROOT=`echo $blk | sed -e "s/[0-9]*$//"`
 
 	zcat /mnt/ramdisk.img | cpio -id
 
-	if [ -e /mnt/system.img ]; then
+	if [ -n "$LIVE" ]; then
 		mount -o loop /mnt/system.img system
-		found=1
-	else
-		found=2
 	fi
 
 	mkdir -p mnt
@@ -67,16 +74,26 @@ find_system()
 	fi
 
 	dev=/dev/block/$blk
-	echo "Finding system in - $dev"
 
 	mkdir -p /mnt2
 
+	if [ -n "$LIVE" ]; then
+		found=1
+	fi
+
 	# try mounting it and verify needed files
-	mount $dev /mnt2 || return 1
+	mount $dev /mnt2 2> /dev/null || return 1
 
 	if [ -d /mnt2/system ]; then
-		mount --bind /mnt2/system system
-		found=1
+		if [ -n "$LIVE" ]; then
+			# Found a system folder in live boot; we are upgrading
+			export SYSTEM=`echo $blk | sed -e "s/[0-9]*$//"`
+			umount /mnt2
+			found=1
+		else
+			mount --bind /mnt2/system system
+			found=2
+		fi
 	else
 		umount /mnt2
 		return 1
@@ -87,6 +104,7 @@ find_system()
 	fi
 
 	hash -r
+	return 0
 }
 
 goto_shell()
@@ -109,15 +127,16 @@ load_kernel_modules()
 mount -t tmpfs tmpfs /newroot
 cd /newroot
 found=0
-for d in `ls /dev/sd*[1-9]`; do
+for d in `ls /dev/[hms][dm][0-9a-z]*`; do
 	find_root $d && break
 done
 
 if [ $found -eq 0 ]; then
 	goto_shell find-root-fail
-elif [ $found -eq 2 ]; then
+else
+	# Find if we have a system folder
 	found=0
-	for d in `ls /dev/sd*[1-9]`; do
+	for d in `ls /dev/[hms][dm][0-9a-z]*`; do
 		find_system $d && break
 	done
 fi
