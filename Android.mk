@@ -8,6 +8,7 @@ LOCAL_STATIC_LIBRARIES := libdiskconfig_host libcutils liblog
 install_mbr := $(HOST_OUT_EXECUTABLES)/$(LOCAL_MODULE)
 include $(BUILD_HOST_EXECUTABLE)
 
+BDATE ?= $(shell date +"%F")
 TARGET_INITRD_DIR := $(PRODUCT_OUT)/initrd
 LOCAL_INITRD_DIR := $(LOCAL_PATH)/initrd
 BOOT_DIR := $(LOCAL_PATH)/boot
@@ -15,6 +16,7 @@ INITRD := $(PRODUCT_OUT)/initrd.img
 $(INITRD): $(wildcard $(LOCAL_PATH)/initrd/*/*) | $(MKBOOTFS)
 	rm -rf $(TARGET_INITRD_DIR)
 	$(ACP) -dprf $(LOCAL_INITRD_DIR) $(TARGET_INITRD_DIR)
+	echo "BUILDDATE=$(BDATE)" > $(TARGET_INITRD_DIR)/scripts/3-builddate
 	mkdir -p $(addprefix $(TARGET_INITRD_DIR)/,mnt proc sys tmp dev etc lib newroot sbin usr/bin usr/sbin scratchpad)
 	$(MKBOOTFS) $(TARGET_INITRD_DIR) | gzip -9 > $@
 
@@ -31,7 +33,7 @@ $(ANDROID_IA-EFI): $(addprefix $(PRODUCT_OUT)/,initrd.img kernel ramdisk.img sys
 	blksize=$$(($$(($$blksize + 8)) * 1024));	\
 	rm -f $@.fat; mkdosfs -n ANDROID-IA -C $@.fat $$blksize
 	mcopy -Qsi $@.fat $(BOOT_DIR)/* $^ ::
-	sed "s|KERNEL_CMDLINE|$(BOARD_KERNEL_CMDLINE)|" $(BOOT_DIR)/boot/grub/grub.cfg > $(@D)/grub.cfg
+	sed "s|KERNEL_CMDLINE|$(BOARD_KERNEL_CMDLINE)|; s|BUILDDATE|$(BDATE)|" $(BOOT_DIR)/boot/grub/grub.cfg > $(@D)/grub.cfg
 	mcopy -Qoi $@.fat $(@D)/grub.cfg ::boot/grub
 	cat /dev/null > $@; $(install_mbr) -l $(DISK_LAYOUT) -i $@ oand=$@.fat
 	rm -f $@.fat

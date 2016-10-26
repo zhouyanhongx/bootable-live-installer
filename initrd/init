@@ -141,7 +141,7 @@ if [ -n "$DEBUG" ]; then
 fi
 
 if [ -n "$INSTALL" ]; then
-	do_install || goto_shell install-failed
+	do_install "$BUILDDATE" || goto_shell install-failed
 
 	echo -n "Rebooting in 3 .. ";sleep 1
 	echo -n "2 .. "; sleep 1

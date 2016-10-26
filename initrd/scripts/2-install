@@ -147,14 +147,14 @@ do_actual_install()
 
 	echo "set timeout=10" > /scratchpad/boot/grub/grub.cfg
 
-	echo "menuentry 'Android-IA Boot' --class android-ia {" >> /scratchpad/boot/grub/grub.cfg
+	echo "menuentry 'Android-IA Boot ($1)' --class android-ia {" >> /scratchpad/boot/grub/grub.cfg
 	echo "linux /kernel $cmdline quiet" >> /scratchpad/boot/grub/grub.cfg
 	echo "initrd /initrd.img" >> /scratchpad/boot/grub/grub.cfg
 	echo "}" >> /scratchpad/boot/grub/grub.cfg
 
 	echo "" >> /scratchpad/boot/grub/grub.cfg
 
-	echo "menuentry 'Android-IA Boot (w/ Serial' --class android-ia {" >> /scratchpad/boot/grub/grub.cfg
+	echo "menuentry 'Android-IA Boot ($1) (w/ Serial' --class android-ia {" >> /scratchpad/boot/grub/grub.cfg
 	echo "linux /kernel $cmdline ignore_loglevel debug console=tty0 console=ttyS0,115200n8" >> /scratchpad/boot/grub/grub.cfg
 	echo "initrd /initrd.img" >> /scratchpad/boot/grub/grub.cfg
 	echo "}" >> /scratchpad/boot/grub/grub.cfg
@@ -183,5 +183,5 @@ do_install()
 
 	prepare_partition $device || handle_install_error $? || return $?
 
-	do_actual_install || handle_install_error $? || return $?
+	do_actual_install $1 || handle_install_error $? || return $?
 }
