@@ -190,6 +190,9 @@ do_actual_install()
 	echo -n "Syncing ... "
 	sync
 	echo "Done."
+
+	# Create data folder
+	mkdir -p /scratchpad/data
 	umount /scratchpad
 }
 

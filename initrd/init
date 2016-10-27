@@ -99,10 +99,6 @@ find_system()
 		return 1
 	fi
 
-	if [ -d /mnt2/data ]; then
-		mount --bind /mnt2/data data
-	fi
-
 	hash -r
 	return 0
 }
