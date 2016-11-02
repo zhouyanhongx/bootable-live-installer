@@ -109,17 +109,6 @@ goto_shell()
 		sh 2>&1
 }
 
-load_kernel_modules()
-{
-        modules_dir=/tmp/loadmodules
-        echo 'loadmodules() { while read dev; do case $dev in' > $modules_dir
-        sort -r /lib/modules/`uname -r`/modules.alias | \
-               sed -n 's/^alias  *\([^ ]*\)  *\(.*\)/\1)modprobe \2;;/p' >> $modules_dir
-        echo 'esac; done; }' >> $modules_dir
-        source $modules_dir
-        cat /sys/bus/*/devices/*/modalias | loadmodules
-}
-
 mount -t tmpfs tmpfs /newroot
 cd /newroot
 found=0
@@ -149,7 +138,9 @@ for s in `ls /scripts/*`; do
 	test -e "$s" && source $s
 done
 
-load_kernel_modules
+if [ -n "$INSTALL" -o -n "$DEBUG" ]; then
+       modprobe atkbd hid-apple
+fi
 
 if [ -n "$DEBUG" ]; then
 	goto_shell debug-shell
