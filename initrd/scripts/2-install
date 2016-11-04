@@ -45,6 +45,12 @@ select_device()
 				continue
 			fi
 
+			if [ -n "$CI_BUILD" ]; then
+				# Select the first device found
+				device=$d
+				return
+			fi
+
 			i=$(( i + 1 ))
 			echo $i. $d
 			list="$list$d "
@@ -77,16 +83,18 @@ select_device()
 
 prepare_partition()
 {
-	echo -n "Auto partitioning /dev/$device. All data will be lost. Continue (y/[n]): "
-	read ans
-	if [ "$ans" != "y" ]; then
-		return $ERR_USR_PART_ABRT
-	fi
+	if [ -z "$CI_BUILD" ]; then
+		echo -n "Auto partitioning /dev/$device. All data will be lost. Continue (y/[n]): "
+		read ans
+		if [ "$ans" != "y" ]; then
+			return $ERR_USR_PART_ABRT
+		fi
 
-	echo -n "Are you sure (y/[n]): "
-	read ans
-	if [ "$ans" != "y" ]; then
-		return $ERR_USR_PART_ABRT
+		echo -n "Are you sure (y/[n]): "
+		read ans
+		if [ "$ans" != "y" ]; then
+			return $ERR_USR_PART_ABRT
+		fi
 	fi
 
 	# unmount if already mounted
@@ -128,7 +136,7 @@ _PART
 
 	# Format the partitions
 	mkfs.fat -n EFI $boot
-	mkfs.ext4 -L Android-IA $system
+	yes | mkfs.ext4 -L Android-IA $system
 }
 
 show_progress()
