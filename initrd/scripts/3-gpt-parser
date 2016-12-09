@@ -1,0 +1,21 @@
+function gpt_parse_section() {
+	result=`sed -e 's/[[:space:]]*\=[[:space:]]*/=/g' \
+		   -e 's/;.*$//' \
+		   -e 's/[[:space:]]*$//' \
+		   -e 's/^[[:space:]]*//' \
+		   -e "s/^\(.*\)=\([^\"']*\)$/\1=\"\2\"/" \
+		   < $1 \
+		   | sed -n -e "/^\[$2\]/,/^\s*\[/{/^[^;].*\=.*/p;}"`
+
+	echo $result
+}
+
+function gpt_get_section_field() {
+	if [ $2 == "partitions" ]; then
+		field=`echo $1 | sed -r 's/[[:alnum:]]+=/\n&/g' | awk -F= '$1=="'$2'"{print $2}'| awk '{print substr($0, 2, length($0) - 2)}'`
+	else
+		field=`echo $1 | sed -r 's/[[:alnum:]]+=/\n&/g' | awk -F= '$1=="'$2'"{print $2}'| awk '{print substr($0, 2, length($0) - 3)}'`
+	fi
+
+	echo $field
+}
