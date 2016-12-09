@@ -107,36 +107,77 @@ prepare_partition()
 
 	dd if=/dev/zero of=/dev/$device bs=512 count=2048
 
-	fdisk -u -b 2048 /dev/$device << _PART
-	o
-	n
-	p
-	1
-	2048
-	67583
-	n
-	p
-	2
-	67584
+	# Parse the gpt.ini file and create partitions
+	gpt_file="gpt.androidia_64.ini"
+	section=$(gpt_parse_section $gpt_file base)
+	partitions=$(gpt_get_section_field "$section" partitions)
+	num=0
+	start=2048
 
-	a
-	1
-	p
-	w
-_PART
+	# Clear the partition table and recompute CHS
+	sgdisk -oC /dev/$device 2> /dev/null
+
+	for part in $partitions
+	do
+		num=$(( num + 1 ))
+		section=$(gpt_parse_section $gpt_file "partition.$part")
+		part_len=$(gpt_get_section_field "$section" "len")
+		part_label=$(gpt_get_section_field "$section" "label")
+		part_type=$(gpt_get_section_field "$section" "type")
+
+		echo "Creating $part_label:$part_len MB:$part_type"
+
+		end=$(( start + 1024 * 1024 * part_len / 512 ))
+
+		if [ "$part" == "data" ]; then
+			sgdisk -n $num:$start: /dev/$device 1> /dev/null
+		else
+			sgdisk -n $num:$start:$end /dev/$device 1> /dev/null
+		fi
+
+		if [ $? -gt 0 ]; then
+			exit 1
+		fi
+
+		sgdisk -c $num:$part_label /dev/$device 1> /dev/null
+
+		start=$(( end + 1 ))
+
+		if [ $part == "system" ]; then
+			syspartno=$num
+		elif [ $part == "data" ]; then
+			datapartno=$num
+		elif [ $part == "cache" ]; then
+			cachepartno=$num
+		elif [ $part == "bootloader" ]; then
+			bootpartno=$num
+			sgdisk -t $num:ef00 /dev/$device
+		fi
+	done
+
+	sgdisk -p /dev/$device
 
 	ismmc=`echo $device | grep mmcblk`
 	if [ -n "$ismmc" ]; then
-		boot=/dev/"$device"p1
-		system=/dev/"$device"p2
+		boot=/dev/"$device"p$bootpartno
+		system=/dev/"$device"p$syspartno
+		data=/dev/"$device"p$datapartno
+		cache=/dev/"$device"p$cachepartno
 	else
-		boot=/dev/"$device"1
-		system=/dev/"$device"2
+		boot=/dev/"$device"$bootpartno
+		system=/dev/"$device"$syspartno
+		data=/dev/"$device"$datapartno
+		cache=/dev/"$device"$cachepartno
+
+		# update the fstab which assumed mmc device by default
+		sed -i 's/mmcblk[1-9]p/sda/g' fstab.androidia_64
 	fi
 
 	# Format the partitions
 	mkfs.fat -n EFI $boot
 	yes | mkfs.ext4 -L Android-IA $system
+	yes | mkfs.ext4 -L DATA $data
+	yes | mkfs.ext4 -L CACHE $cache
 }
 
 show_progress()
@@ -191,7 +232,7 @@ do_actual_install()
 	# Install Android System
 	mount $system /scratchpad
 	fcnt=`find /newroot/system | wc -l`
-	cp -dprf /newroot/system /scratchpad &
+	cp -dprf /newroot/system/* /scratchpad &
 
 	show_progress $! $fcnt /scratchpad
 
@@ -199,8 +240,6 @@ do_actual_install()
 	sync
 	echo "Done."
 
-	# Create data folder
-	mkdir -p /scratchpad/data
 	umount /scratchpad
 }
 
