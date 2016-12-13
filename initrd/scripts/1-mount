@@ -1,9 +1,5 @@
 mount_data()
 {
 	mountpoint -q data && return
-	if [ -d /mnt2/data ]; then
-		mount --bind /mnt2/data data
-	else
-		mount -t tmpfs tmpfs data
-	fi
+	mount -t tmpfs tmpfs data
 }

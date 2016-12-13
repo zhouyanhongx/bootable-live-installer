@@ -84,18 +84,21 @@ find_system()
 	# try mounting it and verify needed files
 	mount $dev /mnt2 2> /dev/null || return 1
 
-	if [ -d /mnt2/system ]; then
+	sysfnd=`cat /mnt2/build.prop 2> /dev/null | grep "ro.product.name" | cut -d"=" -f2`
+
+	# In case of LIVE anyway we don't need this partition mounted
+	# In case of normal boot, fstab will take care of mounting
+	umount /mnt2
+
+	if [ "$sysfnd" == "androidia_64" ]; then
 		if [ -n "$LIVE" ]; then
 			# Found a system folder in live boot; we are upgrading
 			export SYSTEM=`echo $blk | sed -e "s/[0-9]*$//"`
-			umount /mnt2
 			found=1
 		else
-			mount --bind /mnt2/system system
 			found=2
 		fi
 	else
-		umount /mnt2
 		return 1
 	fi
 
@@ -156,7 +159,14 @@ if [ -n "$INSTALL" ]; then
 fi
 
 load_ext_modules
-mount_data
+
+# Otherwise fstab will take care
+if [ -n "$LIVE" ]; then
+	# update fstab to only have minimal fstab as everything
+	# is already mounted differently in LIVE boot
+	sed -i '/\/dev\/block\//d' fstab.androidia_64
+	mount_data
+fi
 
 # Disable mdev before switching to Android.
 # It conflicts with Android's init
