@@ -158,6 +158,13 @@ fi
 load_ext_modules
 mount_data
 
+# Correct the fstab which assumed GPT but that is not suported yet
+if [ -n "$LIVE" ]; then
+       # update fstab to only have minimal fstab as everything
+       # is already mounted differently in LIVE boot
+       sed -i '/\/dev\/block\//d' fstab.androidia_64
+fi
+
 # Disable mdev before switching to Android.
 # It conflicts with Android's init
 echo > /proc/sys/kernel/hotplug
