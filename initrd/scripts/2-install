@@ -149,6 +149,8 @@ prepare_partition()
 			datapartno=$num
 		elif [ $part == "cache" ]; then
 			cachepartno=$num
+		elif [ $part == "config" ]; then
+			configpartno=$num
 		elif [ $part == "bootloader" ]; then
 			bootpartno=$num
 			sgdisk -t $num:ef00 /dev/$device
@@ -163,11 +165,13 @@ prepare_partition()
 		system=/dev/"$device"p$syspartno
 		data=/dev/"$device"p$datapartno
 		cache=/dev/"$device"p$cachepartno
+		config=/dev/"$device"p$configpartno
 	else
 		boot=/dev/"$device"$bootpartno
 		system=/dev/"$device"$syspartno
 		data=/dev/"$device"$datapartno
 		cache=/dev/"$device"$cachepartno
+		config=/dev/"$device"$configpartno
 	fi
 
 	# Format the partitions
@@ -175,6 +179,7 @@ prepare_partition()
 	yes | mkfs.ext4 -L Android-IA $system
 	yes | mkfs.ext4 -L DATA $data
 	yes | mkfs.ext4 -L CACHE $cache
+	yes | mkfs.ext4 -L CONFIG $config
 }
 
 show_progress()
