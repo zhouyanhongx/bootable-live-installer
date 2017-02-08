@@ -164,26 +164,6 @@ do_actual_install()
 	mount $boot /scratchpad
 	cp -dprf /mnt/boot /mnt/efi /mnt/kernel /mnt/initrd.img /mnt/ramdisk.img /scratchpad
 
-	# update the fstab which by default assumed GPT partitioning
-	# support for GPT partitioning is not yet enabled so remove
-	#
-	# we have to do this in ext4 partition to preserve links
-	mkdir /tmp/extra
-	mount $system /tmp/extra
-
-	cd /tmp/extra
-	mkdir ramdisk; cd ramdisk
-	zcat /scratchpad/ramdisk.img | cpio -i
-	rm /scratchpad/ramdisk.img
-
-	# update the fstab to be minimal
-	sed -i '/\/dev\/block\//d' fstab.androidia_64
-
-	find . | cpio -o -Hnewc | gzip > /scratchpad/ramdisk.img
-	cd ..; rm -rf ramdisk
-	cd /newroot
-	umount /tmp/extra
-
 	# update grub entries
 	cat /proc/cmdline > .file
 	sed -i 's/INSTALL=1//; s/LIVE=1//' .file
