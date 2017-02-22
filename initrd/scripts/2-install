@@ -145,6 +145,8 @@ prepare_partition()
 
 		if [ $part == "system" ]; then
 			syspartno=$num
+		elif [ $part == "vendor" ]; then
+			vendorpartno=$num
 		elif [ $part == "data" ]; then
 			datapartno=$num
 		elif [ $part == "cache" ]; then
@@ -163,12 +165,14 @@ prepare_partition()
 	if [ -n "$ismmc" ]; then
 		boot=/dev/"$device"p$bootpartno
 		system=/dev/"$device"p$syspartno
+		vendor=/dev/"$device"p$vendorpartno
 		data=/dev/"$device"p$datapartno
 		cache=/dev/"$device"p$cachepartno
 		config=/dev/"$device"p$configpartno
 	else
 		boot=/dev/"$device"$bootpartno
 		system=/dev/"$device"$syspartno
+		vendor=/dev/"$device"$vendorpartno
 		data=/dev/"$device"$datapartno
 		cache=/dev/"$device"$cachepartno
 		config=/dev/"$device"$configpartno
@@ -180,6 +184,7 @@ prepare_partition()
 	yes | mkfs.ext4 -L DATA $data
 	yes | mkfs.ext4 -L CACHE $cache
 	yes | mkfs.ext4 -L CONFIG $config
+	yes | mkfs.ext4 -L VENDOR $vendor
 }
 
 show_progress()
@@ -256,6 +261,19 @@ do_actual_install()
 	mount $system /scratchpad
 	fcnt=`find /newroot/system | wc -l`
 	cp -dprf /newroot/system/* /scratchpad &
+
+	show_progress $! $fcnt /scratchpad
+
+	echo -n "Syncing ... "
+	sync
+	echo "Done."
+
+	umount /scratchpad
+
+	# Install Android Vendor
+	mount $vendor /scratchpad
+	fcnt=`find /newroot/vendor | wc -l`
+	cp -dprf /newroot/vendor/* /scratchpad &
 
 	show_progress $! $fcnt /scratchpad
 

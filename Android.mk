@@ -34,12 +34,12 @@ $(INITRD): $(wildcard $(LOCAL_PATH)/initrd/*/*) | $(MKBOOTFS)
 # 3. Copy GRUB2 files
 ANDROID_IA-EFI := $(PRODUCT_OUT)/$(TARGET_PRODUCT).img
 DISK_LAYOUT := $(LOCAL_PATH)/editdisklbl/disk_layout.conf
-$(ANDROID_IA-EFI): $(addprefix $(PRODUCT_OUT)/,initrd.img kernel ramdisk.img system.img) | $(install_mbr)
+$(ANDROID_IA-EFI): $(addprefix $(PRODUCT_OUT)/,initrd.img kernel ramdisk.img vendor.img system.img) | $(install_mbr)
 	blksize=0; \
-	for size in `du -sBM $^ | awk '{print $$1}' | cut -d'M' -f1`; do \
+	for size in `du -sBM --apparent-size $^ | awk '{print $$1}' | cut -d'M' -f1`; do \
 		blksize=$$(($$blksize + $$size)); \
 	done; \
-	blksize=$$(($$(($$blksize + 8)) * 1024));	\
+	blksize=$$(($$(($$blksize + 64)) * 1024));	\
 	rm -f $@.fat; mkdosfs -n ANDROID-IA -C $@.fat $$blksize
 	mcopy -Qsi $@.fat $(BOOT_DIR)/* $^ ::
 	sed "s|KERNEL_CMDLINE|$(BOARD_KERNEL_CMDLINE)|; s|BUILDDATE|$(BDATE)|; s|GRUB_DEFAULT|$(GRUB_DEFAULT)|; s|GRUB_TIMEOUT|$(GRUB_TIMEOUT)|" $(BOOT_DIR)/boot/grub/grub.cfg > $(@D)/grub.cfg

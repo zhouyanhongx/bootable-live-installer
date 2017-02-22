@@ -46,6 +46,12 @@ find_root()
 			found=0
 			return 1
 		fi
+		# should find vendor.img
+		if [ ! -e /mnt/vendor.img ]; then
+			umount /mnt
+			found=0
+			return 1
+		fi
 	fi
 
 	found=1
@@ -56,6 +62,7 @@ find_root()
 
 	if [ -n "$LIVE" ]; then
 		mount -o loop /mnt/system.img system
+		mount -o loop /mnt/vendor.img vendor
 	fi
 
 	mkdir -p mnt
