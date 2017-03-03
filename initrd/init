@@ -141,7 +141,10 @@ if [ $found -eq 0 ]; then
 fi
 
 ln -s newroot/system /
-ln -s ../system/lib/firmware ../system/lib/modules /lib
+ln -s newroot/vendor /
+ln -s ../system/lib/firmware /lib
+mkdir -p /lib/modules
+ln -s /vendor/lib/modules /lib/modules/`uname -r`
 
 # load scripts
 for s in `ls /scripts/*`; do
