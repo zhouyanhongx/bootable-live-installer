@@ -142,7 +142,7 @@ fi
 
 ln -s newroot/system /
 ln -s newroot/vendor /
-ln -s ../system/lib/firmware /lib
+ln -s /vendor/lib/firmware /lib
 mkdir -p /lib/modules
 ln -s /vendor/lib/modules /lib/modules/`uname -r`
 
