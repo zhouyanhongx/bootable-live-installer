@@ -30,11 +30,11 @@ $(INITRD): $(LOCAL_PATH)/initrd/init $(wildcard $(LOCAL_PATH)/initrd/*/*) | $(MK
 	mkdir -p $(addprefix $(TARGET_INITRD_DIR)/,mnt proc sys tmp dev etc lib newroot sbin usr/bin usr/sbin scratchpad)
 	$(MKBOOTFS) $(TARGET_INITRD_DIR) | gzip -9 > $@
 
-$(PRODUCT_OUT)/vendor.sfs : $(PRODUCT_OUT)/vendor.img
+$(PRODUCT_OUT)/vendor.sfs : $(PRODUCT_OUT)/vendor.img | $(UNSPARSER)
 	simg2img $(PRODUCT_OUT)/{vendor.img,vendor.sfs}
 	rm $(PRODUCT_OUT)/vendor.img
 
-$(PRODUCT_OUT)/system.sfs : $(PRODUCT_OUT)/system.img
+$(PRODUCT_OUT)/system.sfs : $(PRODUCT_OUT)/system.img | $(UNSPARSER)
 	simg2img $(PRODUCT_OUT)/{system.img,system.sfs}
 	rm $(PRODUCT_OUT)/system.img
 
@@ -45,10 +45,9 @@ $(PRODUCT_OUT)/system.sfs : $(PRODUCT_OUT)/system.img
 ANDROID_IA-EFI := $(PRODUCT_OUT)/$(TARGET_PRODUCT).img
 DISK_LAYOUT := $(LOCAL_PATH)/editdisklbl/disk_layout.conf
 
-$(ANDROID_IA-EFI): $(UNSPARSER) $(addprefix $(PRODUCT_OUT)/,initrd.img kernel ramdisk.img system.sfs vendor.sfs ) | $(install_mbr)
+$(ANDROID_IA-EFI): $(addprefix $(PRODUCT_OUT)/,initrd.img kernel ramdisk.img system.sfs vendor.sfs ) | $(install_mbr)
 	blksize=0; \
-	echo $(filter-out $<,$^); \
-	for size in `du -sBM --apparent-size $(filter-out $<,$^) | awk '{print $$1}' | cut -d'M' -f1`; do \
+	for size in `du -sBM --apparent-size $^ | awk '{print $$1}' | cut -d'M' -f1`; do \
 		blksize=$$(($$blksize + $$size)); \
 	done; \
 	blksize=$$(($$(($$blksize + 64)) * 1024));	\
