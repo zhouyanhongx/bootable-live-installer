@@ -108,7 +108,7 @@ prepare_partition()
 	dd if=/dev/zero of=/dev/$device bs=512 count=2048
 
 	# Parse the gpt.ini file and create partitions
-	gpt_file="gpt.androidia_64.ini"
+	gpt_file="gpt.$product.ini"
 	section=$(gpt_parse_section $gpt_file base)
 	partitions=$(gpt_get_section_field "$section" partitions)
 	num=0
@@ -225,7 +225,7 @@ do_actual_install()
 		rm /scratchpad/ramdisk.img
 
 		# update the fstab which assumed mmc device by default
-		sed -i "s/mmcblk[1-9]p/$device/g" fstab.androidia_64
+		sed -i "s/mmcblk[1-9]p/$device/g" fstab.$product
 
 		find . | cpio -o -Hnewc | gzip > /scratchpad/ramdisk.img
 		cd ..; rm -rf ramdisk

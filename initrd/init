@@ -97,7 +97,7 @@ find_system()
 	# In case of normal boot, fstab will take care of mounting
 	umount /mnt2
 
-	if [ "$sysfnd" == "androidia_64" ]; then
+	if [ "$sysfnd" == "$product" ]; then
 		if [ -n "$LIVE" ]; then
 			# Found a system folder in live boot; we are upgrading
 			export SYSTEM=`echo $blk | sed -e "s/[0-9]*$//"`
@@ -118,6 +118,15 @@ goto_shell()
 		echo "($1) ... dropping to busybox ash."
 		sh 2>&1
 }
+
+product=androidia_64
+for c in `cat /proc/cmdline`; do
+	case $c in
+		androidboot.hardware=*)
+			product="${c//androidboot.hardware=}"
+			;;
+	esac
+done
 
 mount -t tmpfs tmpfs /newroot
 cd /newroot
@@ -174,7 +183,7 @@ load_ext_modules
 if [ -n "$LIVE" ]; then
 	# update fstab to only have minimal fstab as everything
 	# is already mounted differently in LIVE boot
-	sed -i '/\/dev\/block\//d' fstab.androidia_64
+	sed -i '/\/dev\/block\//d' fstab.$product
 	mount_data
 fi
 
