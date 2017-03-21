@@ -27,6 +27,7 @@ $(INITRD): $(LOCAL_PATH)/initrd/init $(wildcard $(LOCAL_PATH)/initrd/*/*) | $(MK
 	$(ACP) -dprf $(LOCAL_INITRD_DIR) $(TARGET_INITRD_DIR)
 	echo "BUILDDATE=$(BDATE)" > $(TARGET_INITRD_DIR)/scripts/3-buildinfo
 	echo "CI_BUILD=$(CI_BUILD)" >> $(TARGET_INITRD_DIR)/scripts/3-buildinfo
+	sed "s|SERIAL_PORT|$(SERIAL_PARAMETER)|" $(LOCAL_INITRD_DIR)/scripts/2-install > $(TARGET_INITRD_DIR)/scripts/2-install
 	mkdir -p $(addprefix $(TARGET_INITRD_DIR)/,mnt proc sys tmp dev etc lib newroot sbin usr/bin usr/sbin scratchpad)
 	$(MKBOOTFS) $(TARGET_INITRD_DIR) | gzip -9 > $@
 
@@ -53,7 +54,7 @@ $(ANDROID_IA-EFI): $(addprefix $(PRODUCT_OUT)/,initrd.img kernel ramdisk.img sys
 	blksize=$$(($$(($$blksize + 64)) * 1024));	\
 	rm -f $@.fat; mkdosfs -n ANDROID-IA -C $@.fat $$blksize
 	mcopy -Qsi $@.fat $(BOOT_DIR)/* $^ ::
-	sed "s|KERNEL_CMDLINE|$(BOARD_KERNEL_CMDLINE)|; s|BUILDDATE|$(BDATE)|; s|GRUB_DEFAULT|$(GRUB_DEFAULT)|; s|GRUB_TIMEOUT|$(GRUB_TIMEOUT)|" $(BOOT_DIR)/boot/grub/grub.cfg > $(@D)/grub.cfg
+	sed "s|KERNEL_CMDLINE|$(BOARD_KERNEL_CMDLINE)|; s|BUILDDATE|$(BDATE)|; s|GRUB_DEFAULT|$(GRUB_DEFAULT)|; s|GRUB_TIMEOUT|$(GRUB_TIMEOUT)|; s|SERIAL_PORT|$(SERIAL_PARAMETER)|" $(BOOT_DIR)/boot/grub/grub.cfg > $(@D)/grub.cfg
 	mcopy -Qoi $@.fat $(@D)/grub.cfg ::boot/grub
 	cat /dev/null > $@; $(install_mbr) -l $(DISK_LAYOUT) -i $@ oand=$@.fat
 	rm -f $@.fat
