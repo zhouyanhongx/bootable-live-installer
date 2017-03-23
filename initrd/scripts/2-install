@@ -237,6 +237,9 @@ do_actual_install()
 	cat /proc/cmdline > .file
 	sed -i 's/INSTALL=1//; s/LIVE=1//' .file
 	cmdline=`cat .file`; rm .file
+	serialno=`dmidecode --type system | grep Serial | cut -d" " -f3 | sed 's|:|0|g'`
+	snoparameter="androidboot.serialno=$serialno g_ffs.iSerialNumber=$serialno"
+	cmdline="$cmdline $snoparameter"
 
 	echo "set timeout=10" > /scratchpad/boot/grub/grub.cfg
 
