@@ -40,14 +40,14 @@ find_root()
 	fi
 
 	if [ -n "$LIVE" ]; then
-		# should find system.img
-		if [ ! -e /mnt/system.img ]; then
+		# should find system.sfs
+		if [ ! -e /mnt/system.sfs ]; then
 			umount /mnt
 			found=0
 			return 1
 		fi
-		# should find vendor.img
-		if [ ! -e /mnt/vendor.img ]; then
+		# should find vendor.sfs
+		if [ ! -e /mnt/vendor.sfs ]; then
 			umount /mnt
 			found=0
 			return 1
@@ -61,8 +61,8 @@ find_root()
 	zcat /mnt/ramdisk.img | cpio -id
 
 	if [ -n "$LIVE" ]; then
-		mount -o loop /mnt/system.img system
-		mount -o loop /mnt/vendor.img vendor
+		mount -o loop /mnt/system.sfs system
+		mount -o loop /mnt/vendor.sfs vendor
 	fi
 
 	mkdir -p mnt
