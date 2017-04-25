@@ -8,6 +8,7 @@ LOCAL_SRC_FILES := \
 		../../system/core/libdiskconfig/diskutils.c \
 		../../system/core/libdiskconfig/write_lst.c \
 		../../system/core/libdiskconfig/config_mbr.c
+LOCAL_C_INCLUDES += system/core/libdiskconfig/include
 LOCAL_MODULE := libdiskconfig_host_grub
 LOCAL_MODULE_TAGS := optional
 LOCAL_CFLAGS := -O2 -g -W -Wall -Werror -D_LARGEFILE64_SOURCE
@@ -16,6 +17,7 @@ endif # HOST_OS == linux
 
 include $(CLEAR_VARS)
 LOCAL_MODULE := install_mbr
+LOCAL_C_INCLUDES += system/core/libdiskconfig/include
 LOCAL_SRC_FILES := editdisklbl/editdisklbl.c
 LOCAL_CFLAGS := -O2 -g -W -Wall -Werror# -D_LARGEFILE64_SOURCE
 LOCAL_STATIC_LIBRARIES := libdiskconfig_host_grub libcutils liblog
