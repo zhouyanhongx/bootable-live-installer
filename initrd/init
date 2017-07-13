@@ -32,7 +32,7 @@ find_root()
 	dev=/dev/block/$blk
 
 	# try mounting it and verify needed files
-	mount $dev /mnt 2> /dev/null || return 1
+	mount -o ro $dev /mnt 2> /dev/null || return 1
 
 	if [ ! -e /mnt/ramdisk.img ]; then
 		umount /mnt
@@ -61,8 +61,8 @@ find_root()
 	zcat /mnt/ramdisk.img | cpio -id
 
 	if [ -n "$LIVE" ]; then
-		mount -o loop /mnt/system.sfs system
-		mount -o loop /mnt/vendor.sfs vendor
+		mount -o loop,ro /mnt/system.sfs system
+		mount -o loop,ro /mnt/vendor.sfs vendor
 	fi
 
 	mkdir -p mnt
@@ -89,7 +89,7 @@ find_system()
 	fi
 
 	# try mounting it and verify needed files
-	mount $dev /mnt2 2> /dev/null || return 1
+	mount -o ro $dev /mnt2 2> /dev/null || return 1
 
 	sysfnd=`cat /mnt2/build.prop 2> /dev/null | grep "ro.product.name" | cut -d"=" -f2`
 

@@ -70,7 +70,7 @@ $(ANDROID_IA-EFI): $(addprefix $(PRODUCT_OUT)/,initrd.img kernel ramdisk.img sys
 	blksize=$$(($$(($$blksize + 64)) * 1024));	\
 	rm -f $@.fat; mkdosfs -n ANDROID-IA -C $@.fat $$blksize
 	mcopy -Qsi $@.fat $(BOOT_DIR)/* $^ ::
-	sed "s|KERNEL_CMDLINE|$(BOARD_KERNEL_CMDLINE)|; s|BUILDDATE|$(BDATE)|; s|GRUB_DEFAULT|$(GRUB_DEFAULT)|; s|GRUB_TIMEOUT|$(GRUB_TIMEOUT)|; s|SERIAL_PORT|$(SERIAL_PARAMETER)|" $(BOOT_DIR)/boot/grub/grub.cfg > $(@D)/grub.cfg
+	sed "s|KERNEL_CMDLINE|$(BOARD_KERNEL_CMDLINE)|; s|BUILDDATE|$(BDATE)|; s|GRUB_DEFAULT|$(GRUB_DEFAULT)|; s|GRUB_TIMEOUT|$(GRUB_TIMEOUT)|; s|SERIAL_PORT|$(SERIAL_PARAMETER)|; s|console=ttyS[^ ]* ||" $(BOOT_DIR)/boot/grub/grub.cfg > $(@D)/grub.cfg
 	mcopy -Qoi $@.fat $(@D)/grub.cfg ::boot/grub
 	cat /dev/null > $@; $(install_mbr) -l $(DISK_LAYOUT) -i $@ oand=$@.fat
 	rm -f $@.fat

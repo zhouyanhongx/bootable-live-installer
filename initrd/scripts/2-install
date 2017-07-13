@@ -31,6 +31,11 @@ handle_install_error()
 device=
 boot=
 system=
+vendor=
+syspartno=
+vendorpartno=
+metadatapartno=
+
 select_device()
 {
 	# Select the install device
@@ -125,9 +130,12 @@ prepare_partition()
 		part_label=$(gpt_get_section_field "$section" "label")
 		part_type=$(gpt_get_section_field "$section" "type")
 
-		echo "Creating $part_label:$part_len MB:$part_type"
+		# Let the start address align with 1MB=2048 sectors
+		start=$(( (start + 2047) / 2048 * 2048 ))
 
-		end=$(( start + 1024 * 1024 * part_len / 512 ))
+		end=$(( start + 1024 * 1024 * part_len / 512 - 1))
+
+		echo "Creating $part_label:$part_len MB:$part_type"
 
 		if [ "$part" == "data" ]; then
 			sgdisk -n $num:$start: /dev/$device 1> /dev/null
@@ -143,7 +151,9 @@ prepare_partition()
 
 		start=$(( end + 1 ))
 
-		if [ $part == "system" ]; then
+		if [ $part == "metadata" ]; then
+			metadatapartno=$num
+		elif [ $part == "system" ]; then
 			syspartno=$num
 		elif [ $part == "vendor" ]; then
 			vendorpartno=$num
@@ -184,34 +194,54 @@ prepare_partition()
 
 	# Format the partitions
 	mkfs.fat -n EFI $boot
-	yes | mkfs.ext4 -L Android-IA $system
 	yes | mkfs.ext4 -L DATA $data
 	yes | mkfs.ext4 -L CACHE $cache
 	yes | mkfs.ext4 -L CONFIG $config
 	yes | mkfs.ext4 -L FACTORY $factory
-	yes | mkfs.ext4 -L VENDOR $vendor
 }
 
 show_progress()
 {
-	pid=$1
-	scnt=$2
-	dir=$3
-
-	echo "Installing system image."
-
-	while [ -d "/proc/$pid" ]; do
-		dcnt=`find $dir | wc -l`
-		per=$(( $(( $dcnt / $scnt)) * 100 ))
-		echo -n "#"
-		sleep 1
+	fileblock=$1
+	while read i
+	do
+		outcnt=`echo $i | grep "out" | sed 's/ records.*$//' `
+		if [ "$outcnt" = "" ]; then
+			continue
+		fi
+		printf "%3d%%\b\b\b\b" $(( $(( $outcnt )) * 100 / $fileblock ))
 	done
+	echo ""
+}
 
-	echo " ... Done."
+do_dd_copyfile()
+{
+	infile=$1
+	outfile=$2
+
+	filesize=`/bin/ls -l $infile | awk '{print $5}'`
+	# Each block is 1M
+	fileblock=$(( $filesize / 1024 / 1024 ))
+	echo -n "Total $fileblock MB: "
+
+	dd if=$infile of=$outfile bs=1M 2>&1 | show_progress $fileblock
+
+	echo -n "Syncing ... "
+	sync
+	echo "Done."
 }
 
 do_actual_install()
 {
+	# Wait for $boot is ready
+	echo -n "Wait for $boot is ready "
+	while [ ! -e $boot ]
+	do
+		echo -n "."
+		sleep 1
+	done
+	echo ""
+
 	# Install GRUB2
 	echo -n "Installing grub2 ... "
 	mount $boot /scratchpad
@@ -222,7 +252,6 @@ do_actual_install()
 	ismmc=`echo $device | grep mmcblk`
 	if [ -z "$ismmc" ]; then
 		mkdir /tmp/extra
-		mount $system /tmp/extra
 
 		cd /tmp/extra
 		mkdir ramdisk; cd ramdisk
@@ -232,10 +261,15 @@ do_actual_install()
 		# update the fstab which assumed mmc device by default
 		sed -i "s/mmcblk[1-9]p/$device/g" fstab.$product
 
+		# update the fstab to disable the dm-verity
+		#sed -i "s/,verify[^,]*//g" fstab.$product
+
+		# update the init.x.rc for by-name
+		sed -i "s/^ *symlink \/dev\/block\/.*\/dev\/block\/by-name/    mkdir \/dev\/block\/by-name 0755 root root\n    symlink \/dev\/block\/sda$syspartno \/dev\/block\/by-name\/android_system\n    symlink \/dev\/block\/sda$vendorpartno \/dev\/block\/by-name\/android_vendor\n    symlink \/dev\/block\/sda$metadatapartno \/dev\/block\/by-name\/android_metadata /" init.*rc
+
 		find . | cpio -o -Hnewc | gzip > /scratchpad/ramdisk.img
 		cd ..; rm -rf ramdisk
 		cd /newroot
-		umount /tmp/extra
 	fi
 
 	# update grub entries
@@ -250,14 +284,21 @@ do_actual_install()
 
 	echo "menuentry 'Android-IA Boot ($1)' --class android-ia {" >> /scratchpad/boot/grub/grub.cfg
 	echo "linux /kernel $cmdline quiet" >> /scratchpad/boot/grub/grub.cfg
-	echo "initrd /initrd.img" >> /scratchpad/boot/grub/grub.cfg
+	echo "initrd /ramdisk.img" >> /scratchpad/boot/grub/grub.cfg
+	echo "}" >> /scratchpad/boot/grub/grub.cfg
+
+	echo "" >> /scratchpad/boot/grub/grub.cfg
+
+	echo "menuentry 'Android-IA Boot ($1) (w/ Console)' --class android-ia {" >> /scratchpad/boot/grub/grub.cfg
+	echo "linux /kernel $cmdline ignore_loglevel debug SERIAL_PORT" | sed 's/ console=ttyS[^ ]*//g' >> /scratchpad/boot/grub/grub.cfg
+	echo "initrd /ramdisk.img" >> /scratchpad/boot/grub/grub.cfg
 	echo "}" >> /scratchpad/boot/grub/grub.cfg
 
 	echo "" >> /scratchpad/boot/grub/grub.cfg
 
 	echo "menuentry 'Android-IA Boot ($1) (w/ Serial)' --class android-ia {" >> /scratchpad/boot/grub/grub.cfg
-	echo "linux /kernel $cmdline ignore_loglevel debug SERIAL_PORT" >> /scratchpad/boot/grub/grub.cfg
-	echo "initrd /initrd.img" >> /scratchpad/boot/grub/grub.cfg
+	echo "linux /kernel $cmdline ignore_loglevel debug SERIAL_PORT" | sed 's/ console=tty0//g' >> /scratchpad/boot/grub/grub.cfg
+	echo "initrd /ramdisk.img" >> /scratchpad/boot/grub/grub.cfg
 	echo "}" >> /scratchpad/boot/grub/grub.cfg
 
 	sync
@@ -265,31 +306,24 @@ do_actual_install()
 	echo "Done."
 
 
+
+	# Let the dd command to output the progress
+	while true
+	do
+		killall -USR1 dd
+		sleep 2
+	done 2> /dev/null &
+	sigpid=$!
+
 	# Install Android System
-	mount $system /scratchpad
-	fcnt=`find /newroot/system | wc -l`
-	cp -dprf /newroot/system/* /scratchpad &
-
-	show_progress $! $fcnt /scratchpad
-
-	echo -n "Syncing ... "
-	sync
-	echo "Done."
-
-	umount /scratchpad
+	echo "Copy system partition ... "
+	do_dd_copyfile /mnt/system.sfs $system
 
 	# Install Android Vendor
-	mount $vendor /scratchpad
-	fcnt=`find /newroot/vendor | wc -l`
-	cp -dprf /newroot/vendor/* /scratchpad &
+	echo "Copy vendor partition ... "
+	do_dd_copyfile /mnt/vendor.sfs $vendor
 
-	show_progress $! $fcnt /scratchpad
-
-	echo -n "Syncing ... "
-	sync
-	echo "Done."
-
-	umount /scratchpad
+	kill $sigpid
 }
 
 do_install()
