@@ -59,10 +59,13 @@ find_root()
 	export ROOT=`echo $blk | sed -e "s/[0-9]*$//"`
 
 	zcat /mnt/ramdisk.img | cpio -id
+	mkdir -p /tmp/system-sq /tmp/vendor-sq
 
 	if [ -n "$LIVE" ]; then
-		mount -o loop,ro /mnt/system.sfs system
-		mount -o loop,ro /mnt/vendor.sfs vendor
+		mount -o loop,ro /mnt/system.sfs /tmp/system-sq
+		mount -o loop,ro /tmp/system-sq/system.unsparse system
+		mount -o loop,ro /mnt/vendor.sfs /tmp/vendor-sq
+		mount -o loop,ro /tmp/vendor-sq/vendor.unsparse vendor
 	fi
 
 	mkdir -p mnt

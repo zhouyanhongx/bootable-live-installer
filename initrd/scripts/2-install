@@ -317,11 +317,11 @@ do_actual_install()
 
 	# Install Android System
 	echo "Copy system partition ... "
-	do_dd_copyfile /mnt/system.sfs $system
+	do_dd_copyfile /tmp/system-sq/system.unsparse $system
 
 	# Install Android Vendor
 	echo "Copy vendor partition ... "
-	do_dd_copyfile /mnt/vendor.sfs $vendor
+	do_dd_copyfile /tmp/vendor-sq/vendor.unsparse $vendor
 
 	kill $sigpid
 }

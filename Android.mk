@@ -23,6 +23,7 @@ LOCAL_CFLAGS := -O2 -g -W -Wall -Werror# -D_LARGEFILE64_SOURCE
 LOCAL_STATIC_LIBRARIES := libdiskconfig_host_grub libcutils liblog
 install_mbr := $(HOST_OUT_EXECUTABLES)/$(LOCAL_MODULE)
 UNSPARSER := $(HOST_OUT_EXECUTABLES)/simg2img
+SQUASHER := $(HOST_OUT_EXECUTABLES)/mksquashfs
 include $(BUILD_HOST_EXECUTABLE)
 
 ifeq ($(CI_BUILD),true)
@@ -47,13 +48,15 @@ $(INITRD): $(LOCAL_PATH)/initrd/init $(wildcard $(LOCAL_PATH)/initrd/*/*) | $(MK
 	mkdir -p $(addprefix $(TARGET_INITRD_DIR)/,mnt proc sys tmp dev etc lib newroot sbin usr/bin usr/sbin scratchpad)
 	$(MKBOOTFS) $(TARGET_INITRD_DIR) | gzip -9 > $@
 
-$(PRODUCT_OUT)/vendor.sfs : $(PRODUCT_OUT)/vendor.img | $(UNSPARSER)
-	simg2img $(PRODUCT_OUT)/{vendor.img,vendor.sfs}
-	rm $(PRODUCT_OUT)/vendor.img
+$(PRODUCT_OUT)/vendor.sfs : $(PRODUCT_OUT)/vendor.img | $(UNSPARSER) $(SQUASHER)
+	simg2img $(PRODUCT_OUT)/{vendor.img,vendor.unsparse}
+	mksquashfs $(PRODUCT_OUT)/{vendor.unsparse,vendor.sfs} -noappend
+	rm $(PRODUCT_OUT)/vendor.{img,unsparse}
 
-$(PRODUCT_OUT)/system.sfs : $(PRODUCT_OUT)/system.img | $(UNSPARSER)
-	simg2img $(PRODUCT_OUT)/{system.img,system.sfs}
-	rm $(PRODUCT_OUT)/system.img
+$(PRODUCT_OUT)/system.sfs : $(PRODUCT_OUT)/system.img | $(UNSPARSER) $(SQUASHER)
+	simg2img $(PRODUCT_OUT)/{system.img,system.unsparse}
+	mksquashfs $(PRODUCT_OUT)/{system.unsparse,system.sfs} -noappend
+	rm $(PRODUCT_OUT)/system.{img,unsparse}
 
 
 # 1. Compute the disk file size need in blocks for a block size of 1M
