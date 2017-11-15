@@ -280,6 +280,9 @@ do_actual_install()
 	sed -i 's/INSTALL=1//; s/LIVE=1//' .file
 	cmdline=`cat .file`; rm .file
 	serialno=`dmidecode --type system | grep Serial | cut -d" " -f3 | sed 's|:|0|g'`
+	if [ ${#serialno} -lt 6 ]; then
+		serialno=$(cat /dev/urandom | tr -cd 'a-zA-Z0-9' | head -c 20)
+	fi
 	snoparameter="androidboot.serialno=$serialno g_ffs.iSerialNumber=$serialno"
 	cmdline="$cmdline $snoparameter"
 
