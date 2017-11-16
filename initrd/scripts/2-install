@@ -250,30 +250,27 @@ do_actual_install()
 	# update the fstab if we have boot device other than mmcblk
 	# we have to do this in ext4 partition to preserve links
 	ismmc=`echo $device | grep mmcblk`
-	mkdir /tmp/extra
-
-	cd /tmp/extra
-	mkdir ramdisk; cd ramdisk
-	zcat /scratchpad/ramdisk.img | cpio -i
-	rm /scratchpad/ramdisk.img
-
-	# update the fstab which assumed mmc device by default
 	if [ -z "$ismmc" ]; then
+		mkdir /tmp/extra
+
+		cd /tmp/extra
+		mkdir ramdisk; cd ramdisk
+		zcat /scratchpad/ramdisk.img | cpio -i
+		rm /scratchpad/ramdisk.img
+
+		# update the fstab which assumed mmc device by default
 		sed -i "s/mmcblk[1-9]p/$device/g" fstab.$product
-	else
-		block_dev="$device"p
-		sed -i "s/mmcblk[1-9]p/$block_dev/g" fstab.$product
+
+		# update the fstab to disable the dm-verity
+		#sed -i "s/,verify[^,]*//g" fstab.$product
+
+		# update the init.x.rc for by-name
+		sed -i "s/^ *symlink \/dev\/block\/.*\/dev\/block\/by-name/    mkdir \/dev\/block\/by-name 0755 root root\n    symlink \/dev\/block\/sda$syspartno \/dev\/block\/by-name\/android_system\n    symlink \/dev\/block\/sda$vendorpartno \/dev\/block\/by-name\/android_vendor\n    symlink \/dev\/block\/sda$metadatapartno \/dev\/block\/by-name\/android_metadata /" init.*rc
+
+		find . | cpio -o -Hnewc | gzip > /scratchpad/ramdisk.img
+		cd ..; rm -rf ramdisk
+		cd /newroot
 	fi
-
-	# update the fstab to disable the dm-verity
-	#sed -i "s/,verify[^,]*//g" fstab.$product
-
-	# update the init.x.rc for by-name
-	sed -i "s/^ *symlink \/dev\/block\/.*\/dev\/block\/by-name/    mkdir \/dev\/block\/by-name 0755 root root\n    symlink \/dev\/block\/sda$syspartno \/dev\/block\/by-name\/android_system\n    symlink \/dev\/block\/sda$vendorpartno \/dev\/block\/by-name\/android_vendor\n    symlink \/dev\/block\/sda$metadatapartno \/dev\/block\/by-name\/android_metadata /" init.*rc
-
-	find . | cpio -o -Hnewc | gzip > /scratchpad/ramdisk.img
-	cd ..; rm -rf ramdisk
-	cd /newroot
 
 	# update grub entries
 	cat /proc/cmdline > .file
