@@ -51,12 +51,12 @@ $(INITRD): $(LOCAL_PATH)/initrd/init $(wildcard $(LOCAL_PATH)/initrd/*/*) | $(MK
 $(PRODUCT_OUT)/vendor.sfs : $(PRODUCT_OUT)/vendor.img | $(UNSPARSER) $(SQUASHER)
 	simg2img $(PRODUCT_OUT)/{vendor.img,vendor.unsparse}
 	mksquashfs $(PRODUCT_OUT)/{vendor.unsparse,vendor.sfs} -noappend
-	rm $(PRODUCT_OUT)/vendor.{img,unsparse}
+#	rm $(PRODUCT_OUT)/vendor.{img,unsparse}
 
 $(PRODUCT_OUT)/system.sfs : $(PRODUCT_OUT)/system.img | $(UNSPARSER) $(SQUASHER)
 	simg2img $(PRODUCT_OUT)/{system.img,system.unsparse}
 	mksquashfs $(PRODUCT_OUT)/{system.unsparse,system.sfs} -noappend
-	rm $(PRODUCT_OUT)/system.{img,unsparse}
+#	rm $(PRODUCT_OUT)/system.{img,unsparse}
 
 
 # 1. Compute the disk file size need in blocks for a block size of 1M
@@ -65,7 +65,23 @@ $(PRODUCT_OUT)/system.sfs : $(PRODUCT_OUT)/system.img | $(UNSPARSER) $(SQUASHER)
 ANDROID_IA-EFI := $(PRODUCT_OUT)/$(TARGET_PRODUCT).img
 DISK_LAYOUT := $(LOCAL_PATH)/editdisklbl/disk_layout.conf
 
-$(ANDROID_IA-EFI): $(addprefix $(PRODUCT_OUT)/,initrd.img kernel ramdisk.img system.sfs vendor.sfs ) | $(install_mbr)
+GRUB_FILES := $(addprefix $(PRODUCT_OUT)/,initrd.img kernel ramdisk.img system.sfs vendor.sfs boot.img efi/kernelflinger.efi)
+SRC_GRUBCFG := $(BOOT_DIR)/boot/grub/grub.cfg
+
+ifeq ($(BOARD_AVB_ENABLE),true)
+GRUB_FILES += $(PRODUCT_OUT)/vbmeta.img
+SRC_GRUBCFG := $(BOOT_DIR)/boot/grub/grub_kfonly.cfg
+endif
+
+ifneq ($(BOARD_SLOT_AB_ENABLE),true)
+GRUB_FILES += $(PRODUCT_OUT)/recovery.img
+endif
+
+ifeq ($(TARGET_USE_TRUSTY),true)
+GRUB_FILES += $(PRODUCT_OUT)/tos.img
+endif
+
+$(ANDROID_IA-EFI): $(GRUB_FILES) | $(install_mbr)
 	blksize=0; \
 	for size in `du -sBM --apparent-size $^ | awk '{print $$1}' | cut -d'M' -f1`; do \
 		blksize=$$(($$blksize + $$size)); \
@@ -73,7 +89,7 @@ $(ANDROID_IA-EFI): $(addprefix $(PRODUCT_OUT)/,initrd.img kernel ramdisk.img sys
 	blksize=$$(($$(($$blksize + 64)) * 1024));	\
 	rm -f $@.fat; mkdosfs -n ANDROID-IA -C $@.fat $$blksize
 	mcopy -Qsi $@.fat $(BOOT_DIR)/* $^ ::
-	sed "s|KERNEL_CMDLINE|$(BOARD_KERNEL_CMDLINE)|; s|BUILDDATE|$(BDATE)|; s|GRUB_DEFAULT|$(GRUB_DEFAULT)|; s|GRUB_TIMEOUT|$(GRUB_TIMEOUT)|; s|SERIAL_PORT|$(SERIAL_PARAMETER)|; s|console=ttyS[^ ]* ||" $(BOOT_DIR)/boot/grub/grub.cfg > $(@D)/grub.cfg
+	sed "s|KERNEL_CMDLINE|$(BOARD_KERNEL_CMDLINE)|; s|BUILDDATE|$(BDATE)|; s|GRUB_DEFAULT|$(GRUB_DEFAULT)|; s|GRUB_TIMEOUT|$(GRUB_TIMEOUT)|; s|SERIAL_PORT|$(SERIAL_PARAMETER)|; s|console=ttyS[^ ]* ||" $(SRC_GRUBCFG) > $(@D)/grub.cfg
 	mcopy -Qoi $@.fat $(@D)/grub.cfg ::boot/grub
 	cat /dev/null > $@; $(install_mbr) -l $(DISK_LAYOUT) -i $@ oand=$@.fat
 	rm -f $@.fat

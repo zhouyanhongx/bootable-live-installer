@@ -167,6 +167,10 @@ if [ -n "$INSTALL" -o -n "$DEBUG" ]; then
        modprobe atkbd hid-apple
 fi
 
+if [ -n "$KERNELFLINGER" ]; then
+	install_kf=1
+fi
+
 if [ -n "$DEBUG" ]; then
 	goto_shell debug-shell
 fi
@@ -174,9 +178,14 @@ fi
 if [ -n "$INSTALL" ]; then
 	do_install "$BUILDDATE" || goto_shell install-failed
 
-	echo -n "Rebooting in 3 .. ";sleep 1
-	echo -n "2 .. "; sleep 1
-	echo "1"; sleep 1
+	echo -n "Rebooting in";
+	i=5
+	while [ $i -gt 0 ];
+	do
+		echo -n " $i"
+		i=$(($i - 1))
+		sleep 1
+	done
 	reboot -f
 fi
 

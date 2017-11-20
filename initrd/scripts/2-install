@@ -29,12 +29,49 @@ handle_install_error()
 }
 
 device=
+
+bootloader=
+bootloader2=
+
+vbmeta=
+vbmeta_b=
+vbmeta_size=
+
 boot=
+boot_b=
+boot_size=
+
+tos=
+tos_b=
+tos_size=
+
 system=
+system_b=
+system_size=
+
 vendor=
-syspartno=
-vendorpartno=
-metadatapartno=
+vendor_b=
+vendor_size=
+
+misc=
+misc_size=
+
+metadata=
+metadata_size=
+
+recovery=
+recovery_size=
+
+cache=
+config=
+factory=
+
+persistent=
+teedata=
+
+data=
+
+install_kf=0
 
 select_device()
 {
@@ -86,6 +123,40 @@ select_device()
 	return $ERR_INV_INPUT
 }
 
+# Start partition id = 0
+num=0
+# Start partition sector = 2048
+start=2048
+end=0
+
+create_one_partition()
+{
+	partition_label=$1
+	partition_len=$2
+	partition_type=$3
+
+	# Let the start address align with 1MB=2048 sectors
+	start=$(( (start + 2047) / 2048 * 2048 ))
+
+	if [ $part_len -eq -1 ]; then
+		end=
+	else
+		end=$(( start + 1024 * 1024 * part_len / 512 - 1))
+	fi
+
+	echo "Creating $partition_label:$partition_len MB:$partition_type"
+
+	sgdisk -n $num:$start:$end /dev/$device 1> /dev/null
+
+	if [ $? -gt 0 ]; then
+		exit 1
+	fi
+
+	sgdisk -c $num:$partition_label /dev/$device 1> /dev/null
+
+	start=$(( end + 1 ))
+}
+
 prepare_partition()
 {
 	if [ -z "$CI_BUILD" ]; then
@@ -112,12 +183,17 @@ prepare_partition()
 
 	dd if=/dev/zero of=/dev/$device bs=512 count=2048
 
+	part_prefix=""
+	ismmc=`echo $device | grep mmcblk`
+	if [ -n "$ismmc" ]; then
+		part_prefix="p"
+	fi
+
 	# Parse the gpt.ini file and create partitions
 	gpt_file="gpt.$product.ini"
 	section=$(gpt_parse_section $gpt_file base)
 	partitions=$(gpt_get_section_field "$section" partitions)
-	num=0
-	start=2048
+	echo "partitions: $partitions"
 
 	# Clear the partition table and recompute CHS
 	sgdisk -oC /dev/$device 2> /dev/null
@@ -125,79 +201,139 @@ prepare_partition()
 	for part in $partitions
 	do
 		num=$(( num + 1 ))
+		echo "Partition $num: $part"
 		section=$(gpt_parse_section $gpt_file "partition.$part")
 		part_len=$(gpt_get_section_field "$section" "len")
+		if [ "$part" == "data" ]; then
+			echo "Process the data partition"
+			retry=3
+			while [ $retry -gt 0 ]; do
+				echo "How many GBs you want to used for data partition? -1 for all the free space"
+				read ans
+				if [ $ans -gt 0 -o $ans -eq -1 ]; then
+					part_len=$(($ans * 1024))
+					break
+				fi
+				retry=$(( retry - 1 ))
+			done
+		fi
 		part_label=$(gpt_get_section_field "$section" "label")
 		part_type=$(gpt_get_section_field "$section" "type")
+		part_slot=$(gpt_get_section_field "$section" "has_slot")
 
-		# Let the start address align with 1MB=2048 sectors
-		start=$(( (start + 2047) / 2048 * 2048 ))
-
-		end=$(( start + 1024 * 1024 * part_len / 512 - 1))
-
-		echo "Creating $part_label:$part_len MB:$part_type"
-
-		if [ "$part" == "data" ]; then
-			sgdisk -n $num:$start: /dev/$device 1> /dev/null
+		if [ "$part_slot" == "true" ]; then
+			create_one_partition ${part_label}_a $part_len $part_type
+			num=$(( num + 1 ))
+			create_one_partition ${part_label}_b $part_len $part_type
 		else
-			sgdisk -n $num:$start:$end /dev/$device 1> /dev/null
+			create_one_partition $part_label $part_len $part_type
 		fi
 
-		if [ $? -gt 0 ]; then
-			exit 1
-		fi
-
-		sgdisk -c $num:$part_label /dev/$device 1> /dev/null
-
-		start=$(( end + 1 ))
-
-		if [ $part == "metadata" ]; then
-			metadatapartno=$num
-		elif [ $part == "system" ]; then
-			syspartno=$num
-		elif [ $part == "vendor" ]; then
-			vendorpartno=$num
-		elif [ $part == "data" ]; then
-			datapartno=$num
-		elif [ $part == "cache" ]; then
-			cachepartno=$num
-		elif [ $part == "config" ]; then
-			configpartno=$num
-		elif [ $part == "factory" ]; then
-			factorypartno=$num
-		elif [ $part == "bootloader" ]; then
-			bootpartno=$num
+		if [ $part == "bootloader" ]; then
+			bootloader=/dev/"$device"$part_prefix$num
 			sgdisk -t $num:ef00 /dev/$device
+		elif [ $part == "bootloader2" ]; then
+			bootloader2=/dev/"$device"$part_prefix$num
+			sgdisk -t $num:ef00 /dev/$device
+		elif [ $part == "vbmeta" ]; then
+			if [ "$part_slot" == "true" ]; then
+				vbmeta=/dev/"$device"$part_prefix$((num - 1))
+				vbmeta_b=/dev/"$device"$part_prefix$num
+			else
+				vbmeta=/dev/"$device"$part_prefix$num
+			fi
+			vbmeta_size=$part_len
+		elif [ $part == "boot" ]; then
+			if [ "$part_slot" == "true" ]; then
+				boot=/dev/"$device"$part_prefix$((num - 1))
+				boot_b=/dev/"$device"$part_prefix$num
+			else
+				boot=/dev/"$device"$part_prefix$num
+			fi
+			boot_size=$part_len
+		elif [ $part == "tos" ]; then
+			if [ "$part_slot" == "true" ]; then
+				tos=/dev/"$device"$part_prefix$((num - 1))
+				tos_b=/dev/"$device"$part_prefix$num
+			else
+				tos=/dev/"$device"$part_prefix$num
+			fi
+			tos_size=$part_len
+		elif [ $part == "system" ]; then
+			if [ "$part_slot" == "true" ]; then
+				system=/dev/"$device"$part_prefix$((num - 1))
+				system_b=/dev/"$device"$part_prefix$num
+			else
+				system=/dev/"$device"$part_prefix$num
+			fi
+			system_size=$part_len
+		elif [ $part == "vendor" ]; then
+			if [ "$part_slot" == "true" ]; then
+				vendor=/dev/"$device"$part_prefix$((num - 1))
+				vendor_b=/dev/"$device"$part_prefix$num
+			else
+				vendor=/dev/"$device"$part_prefix$num
+			fi
+			vendor_size=$part_len
+		elif [ $part == "misc" ]; then
+			misc=/dev/"$device"$part_prefix$num
+			misc_size=$part_len
+		elif [ $part == "metadata" ]; then
+			metadata=/dev/"$device"$part_prefix$num
+			metadata_size_size=$part_len
+		elif [ $part == "recovery" ]; then
+			recovery=/dev/"$device"$part_prefix$num
+			recovery_size_size=$part_len
+		elif [ $part == "persistent" ]; then
+			persistent=/dev/"$device"$part_prefix$num
+		elif [ $part == "cache" ]; then
+			cache=/dev/"$device"$part_prefix$num
+		elif [ $part == "config" ]; then
+			config=/dev/"$device"$part_prefix$num
+		elif [ $part == "factory" ]; then
+			factory=/dev/"$device"$part_prefix$num
+		elif [ $part == "teedata" ]; then
+			teedata=/dev/"$device"$part_prefix$num
+		elif [ $part == "data" ]; then
+			data=/dev/"$device"$part_prefix$num
 		fi
 	done
 
 	sgdisk -p /dev/$device
 
-	ismmc=`echo $device | grep mmcblk`
-	if [ -n "$ismmc" ]; then
-		boot=/dev/"$device"p$bootpartno
-		system=/dev/"$device"p$syspartno
-		vendor=/dev/"$device"p$vendorpartno
-		data=/dev/"$device"p$datapartno
-		cache=/dev/"$device"p$cachepartno
-		config=/dev/"$device"p$configpartno
-		factory=/dev/"$device"p$factorypartno
-	else
-		boot=/dev/"$device"$bootpartno
-		system=/dev/"$device"$syspartno
-		vendor=/dev/"$device"$vendorpartno
-		data=/dev/"$device"$datapartno
-		cache=/dev/"$device"$cachepartno
-		config=/dev/"$device"$configpartno
-		factory=/dev/"$device"$factorypartno
+	# Sleep 3 seconds to wait for the /dev/sdax appear.
+	sleep 3
+
+	# In some case, the /dev/sda1 is not exist.
+	if [ ! -e $boot ]; then
+		echo "$boot is not exist, ... dropping to busybox ash."
+		sh 2>&1
 	fi
 
 	# Format the partitions
-	mkfs.fat -n EFI $boot
+	echo "Format bootloader $bootloader"
+	mkfs.fat -n EFI $bootloader
+	echo "Format bootloader2 $bootloader2"
+	mkfs.fat -n EFI $bootloader2
+
+	echo "Format data $data"
 	yes | mkfs.ext4 -L DATA $data
-	yes | mkfs.ext4 -L CACHE $cache
+
+	if [ "$cache" != "" ]; then
+		echo "Format cache $cache"
+		yes | mkfs.ext4 -L CACHE $cache
+	fi
+	echo "Format config $config"
 	yes | mkfs.ext4 -L CONFIG $config
+	echo "Format factory $factory"
 	yes | mkfs.ext4 -L FACTORY $factory
+
+	echo "Clear the misc and metadata partitions"
+	# Clear some partition
+	dd if=/dev/zero of=$misc bs=1M count=$misc_size 2> /dev/null
+	dd if=/dev/zero of=$metadata bs=1M count=$metadata_size 2> /dev/null
+
+	echo "Finish to prepare for the partitions"
 }
 
 show_progress()
@@ -221,7 +357,7 @@ do_dd_copyfile()
 
 	filesize=`/bin/ls -l $infile | awk '{print $5}'`
 	# Each block is 1M
-	fileblock=$(( $filesize / 1024 / 1024 ))
+	fileblock=$((($filesize + 1024 * 1024 - 1)/ 1024 / 1024 ))
 	echo -n "Total $fileblock MB: "
 
 	dd if=$infile of=$outfile bs=1M 2>&1 | show_progress $fileblock
@@ -233,8 +369,8 @@ do_dd_copyfile()
 
 do_actual_install()
 {
-	# Wait for $boot is ready
-	echo -n "Wait for $boot is ready "
+	# Wait for $boot ready
+	echo -n "Wait for $boot ready "
 	while [ ! -e $boot ]
 	do
 		echo -n "."
@@ -244,7 +380,7 @@ do_actual_install()
 
 	# Install GRUB2
 	echo -n "Installing grub2 ... "
-	mount $boot /scratchpad
+	mount $bootloader /scratchpad
 	cp -dprf /mnt/boot /mnt/efi /mnt/kernel /mnt/initrd.img /mnt/ramdisk.img /scratchpad
 
 	# update grub entries
@@ -264,30 +400,50 @@ do_actual_install()
 
 	echo "set timeout=10" > /scratchpad/boot/grub/grub.cfg
 
-	echo "menuentry 'Android-IA Boot ($1)' --class android-ia {" >> /scratchpad/boot/grub/grub.cfg
-	echo "linux /kernel $cmdline quiet" >> /scratchpad/boot/grub/grub.cfg
-	echo "initrd /ramdisk.img" >> /scratchpad/boot/grub/grub.cfg
-	echo "}" >> /scratchpad/boot/grub/grub.cfg
+	if [ $install_kf -eq 1 ]; then
+		cp -dprf /mnt/kernelflinger.efi /scratchpad
 
-	echo "" >> /scratchpad/boot/grub/grub.cfg
+		echo "Add the menu for kernelflinger to GRUB"
+		echo "menuentry 'Android-IA Kernelflinger' --class android-ia {" >> /scratchpad/boot/grub/grub.cfg
+		echo "	insmod part_gpt" >> /scratchpad/boot/grub/grub.cfg
+		echo "	insmod chain" >> /scratchpad/boot/grub/grub.cfg
+		echo "	chainloader /kernelflinger.efi" >> /scratchpad/boot/grub/grub.cfg
+		echo "}" >> /scratchpad/boot/grub/grub.cfg
+		echo "" >> /scratchpad/boot/grub/grub.cfg
 
-	echo "menuentry 'Android-IA Boot ($1) (w/ Console)' --class android-ia {" >> /scratchpad/boot/grub/grub.cfg
-	echo "linux /kernel $cmdline ignore_loglevel debug SERIAL_PORT" | sed 's/ console=ttyS[^ ]*//g' >> /scratchpad/boot/grub/grub.cfg
-	echo "initrd /ramdisk.img" >> /scratchpad/boot/grub/grub.cfg
-	echo "}" >> /scratchpad/boot/grub/grub.cfg
+		echo "menuentry 'Android-IA Kernelflinger Fastboot' --class android-ia {" >> /scratchpad/boot/grub/grub.cfg
+		echo "	insmod part_gpt" >> /scratchpad/boot/grub/grub.cfg
+		echo "	insmod chain" >> /scratchpad/boot/grub/grub.cfg
+		echo "	chainloader /kernelflinger.efi -f" >> /scratchpad/boot/grub/grub.cfg
+		echo "}" >> /scratchpad/boot/grub/grub.cfg
+		echo "" >> /scratchpad/boot/grub/grub.cfg
+	fi
 
-	echo "" >> /scratchpad/boot/grub/grub.cfg
+#	if [ "$vbmeta" = "" -a "$tos" = "" ]; then
+	if [ "$vbmeta" = "" ]; then
+		echo "menuentry 'Android-IA Boot ($1)' --class android-ia {" >> /scratchpad/boot/grub/grub.cfg
+		echo "  linux /kernel $cmdline quiet" >> /scratchpad/boot/grub/grub.cfg
+		echo "  initrd /ramdisk.img" >> /scratchpad/boot/grub/grub.cfg
+		echo "}" >> /scratchpad/boot/grub/grub.cfg
 
-	echo "menuentry 'Android-IA Boot ($1) (w/ Serial)' --class android-ia {" >> /scratchpad/boot/grub/grub.cfg
-	echo "linux /kernel $cmdline ignore_loglevel debug SERIAL_PORT" | sed 's/ console=tty0//g' >> /scratchpad/boot/grub/grub.cfg
-	echo "initrd /ramdisk.img" >> /scratchpad/boot/grub/grub.cfg
-	echo "}" >> /scratchpad/boot/grub/grub.cfg
+		echo "" >> /scratchpad/boot/grub/grub.cfg
+
+		echo "menuentry 'Android-IA Boot ($1) (w/ Console)' --class android-ia {" >> /scratchpad/boot/grub/grub.cfg
+		echo "  linux /kernel $cmdline ignore_loglevel debug SERIAL_PORT" | sed 's/ console=ttyS[^ ]*//g' >> /scratchpad/boot/grub/grub.cfg
+		echo "  initrd /ramdisk.img" >> /scratchpad/boot/grub/grub.cfg
+		echo "}" >> /scratchpad/boot/grub/grub.cfg
+
+		echo "" >> /scratchpad/boot/grub/grub.cfg
+
+		echo "menuentry 'Android-IA Boot ($1) (w/ Serial)' --class android-ia {" >> /scratchpad/boot/grub/grub.cfg
+		echo "  linux /kernel $cmdline ignore_loglevel debug SERIAL_PORT" | sed 's/ console=tty0//g' >> /scratchpad/boot/grub/grub.cfg
+		echo "  initrd /ramdisk.img" >> /scratchpad/boot/grub/grub.cfg
+		echo "}" >> /scratchpad/boot/grub/grub.cfg
+	fi
 
 	sync
 	umount /scratchpad
 	echo "Done."
-
-
 
 	# Let the dd command to output the progress
 	while true
@@ -297,19 +453,70 @@ do_actual_install()
 	done 2> /dev/null &
 	sigpid=$!
 
+
+	if [ $install_kf -eq 1 ]; then
+		# Clear the whole boot partition at first
+		dd if=/dev/zero of=$boot bs=1M count=$boot_size 2> /dev/null
+		echo "Copy boot partition ... to $boot"
+		do_dd_copyfile /mnt/boot.img $boot
+		if [ "$boot_b" != "" ]; then
+			dd if=/dev/zero of=$boot_b bs=1M count=$boot_size 2> /dev/null
+			echo "Copy boot_b partition ... to $boot_b"
+			do_dd_copyfile /mnt/boot.img $boot_b
+		fi
+
+		echo "Copy tos partition ... to $tos"
+		do_dd_copyfile /mnt/tos.img $tos
+		if [ "$tos_b" != "" ]; then
+			echo "Copy tos_b partition ... to $tos_b"
+			do_dd_copyfile /mnt/tos.img $tos_b
+		fi
+
+		if [ "$vbmeta" != "" ]; then
+			echo "Copy vbmeta partition ... to $vbmeta"
+			do_dd_copyfile /mnt/vbmeta.img $vbmeta
+			if [ "$vbmeta_b" != "" ]; then
+				echo "Copy vbmeta_b partition ... to $vbmeta_b"
+				do_dd_copyfile /mnt/vbmeta.img $vbmeta_b
+			fi
+		fi
+
+		if [ "$recovery" != "" ]; then
+			dd if=/dev/zero of=$recovery bs=1M count=$recoverysize 2> /dev/null
+			echo "Copy recovery partition ... to $recovery"
+			do_dd_copyfile /mnt/recovery.img $recovery
+		fi
+	fi
+
 	# Install Android System
-	echo "Copy system partition ... "
+	echo "Copy system partition ... to $system"
 	do_dd_copyfile /tmp/system-sq/system.unsparse $system
+	if [ "$system_b" != "" ]; then
+		echo "Copy system_b partition ... to $system_b"
+		do_dd_copyfile /tmp/system-sq/system.unsparse $system_b
+	fi
 
 	# Install Android Vendor
-	echo "Copy vendor partition ... "
+	echo "Copy vendor partition ... $vendor"
 	do_dd_copyfile /tmp/vendor-sq/vendor.unsparse $vendor
+	if [ "$vendor_b" != "" ]; then
+		echo "Copy vendor_b partition ... $vendor_b"
+		do_dd_copyfile /tmp/vendor-sq/vendor.unsparse $vendor_b
+	fi
+
+	sync
 
 	kill $sigpid
 }
 
 do_install()
 {
+	if [ $install_kf -eq 0 ]; then
+		echo "Does not install kernelflinger"
+	else
+		echo "Install kernelflinger"
+	fi
+
 	select_device || handle_install_error $? || return $?
 
 	prepare_partition $device || handle_install_error $? || return $?
