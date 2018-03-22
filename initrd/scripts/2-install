@@ -205,17 +205,22 @@ prepare_partition()
 		section=$(gpt_parse_section $gpt_file "partition.$part")
 		part_len=$(gpt_get_section_field "$section" "len")
 		if [ "$part" == "data" ]; then
-			echo "Process the data partition"
-			retry=3
-			while [ $retry -gt 0 ]; do
-				echo "How many GBs you want to used for data partition? -1 for all the free space"
-				read ans
-				if [ $ans -gt 0 -o $ans -eq -1 ]; then
-					part_len=$(($ans * 1024))
-					break
-				fi
-				retry=$(( retry - 1 ))
-			done
+			if [ -z "$CI_BUILD" ]; then
+				echo "Process the data partition"
+				retry=3
+				while [ $retry -gt 0 ]; do
+					echo "How many GBs you want to used for data partition? -1 for all the free space"
+					read ans
+					if [ $ans -gt 0 -o $ans -eq -1 ]; then
+						part_len=$(($ans * 1024))
+						break
+					fi
+					retry=$(( retry - 1 ))
+				done
+			else
+				echo "Set the data partition size to 10G"
+				part_len=10240
+			fi
 		fi
 		part_label=$(gpt_get_section_field "$section" "label")
 		part_type=$(gpt_get_section_field "$section" "type")
