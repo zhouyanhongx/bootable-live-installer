@@ -424,7 +424,6 @@ do_actual_install()
 		echo "" >> /scratchpad/boot/grub/grub.cfg
 	fi
 
-#	if [ "$vbmeta" = "" -a "$tos" = "" ]; then
 	if [ "$vbmeta" = "" ]; then
 		echo "menuentry 'PROJECTCELADON Boot ($1)' --class projectceladon {" >> /scratchpad/boot/grub/grub.cfg
 		echo "  linux /kernel $cmdline quiet" >> /scratchpad/boot/grub/grub.cfg
@@ -470,11 +469,13 @@ do_actual_install()
 			do_dd_copyfile /mnt/boot.img $boot_b
 		fi
 
-		echo "Copy tos partition ... to $tos"
-		do_dd_copyfile /mnt/tos.img $tos
-		if [ "$tos_b" != "" ]; then
-			echo "Copy tos_b partition ... to $tos_b"
-			do_dd_copyfile /mnt/tos.img $tos_b
+		if [ "$tos" != "" ]; then
+			echo "Copy tos partition ... to $tos"
+			do_dd_copyfile /mnt/tos.img $tos
+			if [ "$tos_b" != "" ]; then
+				echo "Copy tos_b partition ... to $tos_b"
+				do_dd_copyfile /mnt/tos.img $tos_b
+			fi
 		fi
 
 		if [ "$vbmeta" != "" ]; then
