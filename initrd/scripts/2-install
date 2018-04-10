@@ -134,6 +134,7 @@ create_one_partition()
 	partition_label=$1
 	partition_len=$2
 	partition_type=$3
+	partition_dev=$4
 
 	# Let the start address align with 1MB=2048 sectors
 	start=$(( (start + 2047) / 2048 * 2048 ))
@@ -155,6 +156,19 @@ create_one_partition()
 	sgdisk -c $num:$partition_label /dev/$device 1> /dev/null
 
 	start=$(( end + 1 ))
+	sleep 1
+	mdev -s
+	retry=5
+	while [ $retry -gt 0 -a ! -e $partition_dev ]; do
+		echo "call mdev again to create $partition_dev"
+		mdev -s
+		sleep 1
+		retry=$(( retry - 1 ))
+	done
+	if [ ! -e $partition_dev ]; then
+		echo "$partition_dev is not created, dropping to busybox ash."
+		sh 2>&1
+	fi
 }
 
 prepare_partition()
@@ -227,93 +241,91 @@ prepare_partition()
 		part_slot=$(gpt_get_section_field "$section" "has_slot")
 
 		if [ "$part_slot" == "true" ]; then
-			create_one_partition ${part_label}_a $part_len $part_type
+			dev_part=/dev/$device$part_prefix$num
+			create_one_partition ${part_label}_a $part_len $part_type $dev_part
 			num=$(( num + 1 ))
-			create_one_partition ${part_label}_b $part_len $part_type
+			dev_part_b=/dev/$device$part_prefix$num
+			create_one_partition ${part_label}_b $part_len $part_type $dev_part_b
 		else
-			create_one_partition $part_label $part_len $part_type
+			dev_part=/dev/$device$part_prefix$num
+			create_one_partition $part_label $part_len $part_type $dev_part
 		fi
 
 		if [ $part == "bootloader" ]; then
-			bootloader=/dev/"$device"$part_prefix$num
+			bootloader=$dev_part
 			sgdisk -t $num:ef00 /dev/$device
 		elif [ $part == "bootloader2" ]; then
-			bootloader2=/dev/"$device"$part_prefix$num
+			bootloader2=$dev_part
 			sgdisk -t $num:ef00 /dev/$device
 		elif [ $part == "vbmeta" ]; then
 			if [ "$part_slot" == "true" ]; then
-				vbmeta=/dev/"$device"$part_prefix$((num - 1))
-				vbmeta_b=/dev/"$device"$part_prefix$num
+				vbmeta=$dev_part
+				vbmeta_b=$dev_part_b
 			else
-				vbmeta=/dev/"$device"$part_prefix$num
+				vbmeta=$dev_part
 			fi
 			vbmeta_size=$part_len
 		elif [ $part == "boot" ]; then
 			if [ "$part_slot" == "true" ]; then
-				boot=/dev/"$device"$part_prefix$((num - 1))
-				boot_b=/dev/"$device"$part_prefix$num
+				boot=$dev_part
+				boot_b=$dev_part_b
 			else
-				boot=/dev/"$device"$part_prefix$num
+				boot=$dev_part
 			fi
 			boot_size=$part_len
 		elif [ $part == "tos" ]; then
 			if [ "$part_slot" == "true" ]; then
-				tos=/dev/"$device"$part_prefix$((num - 1))
-				tos_b=/dev/"$device"$part_prefix$num
+				tos=$dev_part
+				tos_b=$dev_part_b
 			else
-				tos=/dev/"$device"$part_prefix$num
+				tos=$dev_part
 			fi
 			tos_size=$part_len
 		elif [ $part == "system" ]; then
 			if [ "$part_slot" == "true" ]; then
-				system=/dev/"$device"$part_prefix$((num - 1))
-				system_b=/dev/"$device"$part_prefix$num
+				system=$dev_part
+				system_b=$dev_part_b
 			else
-				system=/dev/"$device"$part_prefix$num
+				system=$dev_part
 			fi
 			system_size=$part_len
 		elif [ $part == "vendor" ]; then
 			if [ "$part_slot" == "true" ]; then
-				vendor=/dev/"$device"$part_prefix$((num - 1))
-				vendor_b=/dev/"$device"$part_prefix$num
+				vendor=$dev_part
+				vendor_b=$dev_part_b
 			else
-				vendor=/dev/"$device"$part_prefix$num
+				vendor=$dev_part
 			fi
 			vendor_size=$part_len
 		elif [ $part == "misc" ]; then
-			misc=/dev/"$device"$part_prefix$num
+			misc=$dev_part
 			misc_size=$part_len
 		elif [ $part == "metadata" ]; then
-			metadata=/dev/"$device"$part_prefix$num
+			metadata=$dev_part
 			metadata_size_size=$part_len
 		elif [ $part == "recovery" ]; then
-			recovery=/dev/"$device"$part_prefix$num
+			recovery=$dev_part
 			recovery_size_size=$part_len
 		elif [ $part == "persistent" ]; then
-			persistent=/dev/"$device"$part_prefix$num
+			persistent=$dev_part
 		elif [ $part == "cache" ]; then
-			cache=/dev/"$device"$part_prefix$num
+			cache=$dev_part
 		elif [ $part == "config" ]; then
-			config=/dev/"$device"$part_prefix$num
+			config=$dev_part
 		elif [ $part == "factory" ]; then
-			factory=/dev/"$device"$part_prefix$num
+			factory=$dev_part
 		elif [ $part == "teedata" ]; then
-			teedata=/dev/"$device"$part_prefix$num
+			teedata=$dev_part
 		elif [ $part == "data" ]; then
-			data=/dev/"$device"$part_prefix$num
+			data=$dev_part
 		fi
+
 	done
 
 	sgdisk -p /dev/$device
 
 	# Sleep 3 seconds to wait for the /dev/sdax appear.
 	sleep 3
-
-	# In some case, the /dev/sda1 is not exist.
-	if [ ! -e $boot ]; then
-		echo "$boot is not exist, ... dropping to busybox ash."
-		sh 2>&1
-	fi
 
 	# Format the partitions
 	echo "Format bootloader $bootloader"
@@ -376,11 +388,18 @@ do_actual_install()
 {
 	# Wait for $boot ready
 	echo -n "Wait for $boot ready "
+	retry=5
 	while [ ! -e $boot ]
 	do
 		echo -n "."
 		sleep 1
+		retry=$(( retry - 1 ))
 	done
+	if [ ! -e $boot ]; then
+		echo "$boot is not created, dropping to busybox ash."
+		sh 2>&1
+	fi
+
 	echo ""
 
 	# Install GRUB2
