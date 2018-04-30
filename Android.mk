@@ -62,7 +62,7 @@ $(PRODUCT_OUT)/system.sfs : $(PRODUCT_OUT)/system.img | $(UNSPARSER) $(SQUASHER)
 # 1. Compute the disk file size need in blocks for a block size of 1M
 # 2. Prepare a vfat disk file and copy necessary files
 # 3. Copy GRUB2 files
-ANDROID_IA-EFI := $(PRODUCT_OUT)/$(TARGET_PRODUCT).img
+PROJECT_CELADON-EFI := $(PRODUCT_OUT)/$(TARGET_PRODUCT).img
 DISK_LAYOUT := $(LOCAL_PATH)/editdisklbl/disk_layout.conf
 
 GRUB_FILES := $(addprefix $(PRODUCT_OUT)/,initrd.img kernel ramdisk.img system.sfs vendor.sfs boot.img efi/kernelflinger.efi)
@@ -81,18 +81,19 @@ ifeq ($(TARGET_USE_TRUSTY),true)
 GRUB_FILES += $(PRODUCT_OUT)/tos.img
 endif
 
-$(ANDROID_IA-EFI): $(GRUB_FILES) | $(install_mbr)
+$(PROJECT_CELADON-EFI): $(GRUB_FILES) | $(install_mbr)
 	blksize=0; \
 	for size in `du -sBM --apparent-size $^ | awk '{print $$1}' | cut -d'M' -f1`; do \
 		blksize=$$(($$blksize + $$size)); \
 	done; \
 	blksize=$$(($$(($$blksize + 64)) * 1024));	\
-	rm -f $@.fat; mkdosfs -n ANDROID-IA -C $@.fat $$blksize
+	rm -f $@.fat; mkdosfs -n PROJECTCELADON -C $@.fat $$blksize
 	mcopy -Qsi $@.fat $(BOOT_DIR)/* $^ ::
 	sed "s|KERNEL_CMDLINE|$(BOARD_KERNEL_CMDLINE)|; s|BUILDDATE|$(BDATE)|; s|GRUB_DEFAULT|$(GRUB_DEFAULT)|; s|GRUB_TIMEOUT|$(GRUB_TIMEOUT)|; s|SERIAL_PORT|$(SERIAL_PARAMETER)|; s|console=ttyS[^ ]* ||" $(SRC_GRUBCFG) > $(@D)/grub.cfg
 	mcopy -Qoi $@.fat $(@D)/grub.cfg ::boot/grub
 	cat /dev/null > $@; $(install_mbr) -l $(DISK_LAYOUT) -i $@ oand=$@.fat
 	rm -f $@.fat
 
-.PHONY: android_ia-efi
-android_ia-efi: $(ANDROID_IA-EFI)
+.PHONY: project_celadon-efi
+project_celadon-efi: $(PROJECT_CELADON-EFI)
+
