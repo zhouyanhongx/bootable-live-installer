@@ -139,13 +139,14 @@ create_one_partition()
 	# Let the start address align with 1MB=2048 sectors
 	start=$(( (start + 2047) / 2048 * 2048 ))
 
-	if [ $part_len -eq -1 ]; then
+	if [ $part_len -lt 0 ]; then
 		end=
+		echo "Creating $partition_label:all free space:$partition_type"
 	else
 		end=$(( start + 1024 * 1024 * part_len / 512 - 1))
+		echo "Creating $partition_label:$partition_len MB:$partition_type"
 	fi
 
-	echo "Creating $partition_label:$partition_len MB:$partition_type"
 
 	sgdisk -n $num:$start:$end /dev/$device 1> /dev/null
 
