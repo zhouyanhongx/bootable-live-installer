@@ -77,13 +77,20 @@ select_device()
 {
 	# Select the install device
 	retry=3;
-	devlist=`ls /sys/block | grep -v -E "loop|ram|sr|boot"`
+	devlist=`ls /sys/block | grep -v -E "loop|ram|sr|boot|rpmb"`
 
 	while [ $retry -gt 0 ]; do
 		i=0
 		list=
 		for d in $devlist; do
 			if [ $ROOT == $d ]; then
+				continue
+			fi
+
+			# If the block device size less than 7G, then skip it.
+			# Can filter the device such as mmcblk1gp0
+			devsize=`cat /sys/block/$d/size`
+			if [ $devsize -lt $((7 * 1024 * 1024 * 1024 / 512)) ]; then
 				continue
 			fi
 
@@ -94,7 +101,7 @@ select_device()
 			fi
 
 			i=$(( i + 1 ))
-			echo $i. $d
+			echo $i. $d  $(($devsize / 2 / 1024 / 1024))GB
 			list="$list$d "
 		done
 
