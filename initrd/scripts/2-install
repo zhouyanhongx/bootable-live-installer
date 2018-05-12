@@ -459,15 +459,17 @@ do_actual_install()
 
 		echo "" >> /scratchpad/boot/grub/grub.cfg
 
-		echo "menuentry 'PROJECTCELADON Boot ($1) (w/ Console)' --class projectceladon {" >> /scratchpad/boot/grub/grub.cfg
-		echo "  linux /kernel $cmdline ignore_loglevel debug SERIAL_PORT" | sed 's/ console=ttyS[^ ]*//g' >> /scratchpad/boot/grub/grub.cfg
+		echo "menuentry 'PROJECTCELADON Boot ($1) (Console debug)' --class projectceladon {" >> /scratchpad/boot/grub/grub.cfg
+		pure_cmdline=`echo $cmdline | sed 's| console=ttyS[^ ]*||g; s| console=tty0||g; s| ignore_loglevel||g; s| printk\.devkmsg=on||g; s| quite||g'`
+		echo "  linux /kernel $pure_cmdline ignore_loglevel printk.devkmsg=on debug console=tty0" >> /scratchpad/boot/grub/grub.cfg
 		echo "  initrd /ramdisk.img" >> /scratchpad/boot/grub/grub.cfg
 		echo "}" >> /scratchpad/boot/grub/grub.cfg
 
 		echo "" >> /scratchpad/boot/grub/grub.cfg
 
-		echo "menuentry 'PROJECTCELADON Boot ($1) (w/ Serial)' --class projectceladon {" >> /scratchpad/boot/grub/grub.cfg
-		echo "  linux /kernel $cmdline ignore_loglevel debug SERIAL_PORT" | sed 's/ console=tty0//g' >> /scratchpad/boot/grub/grub.cfg
+		echo "menuentry 'PROJECTCELADON Boot ($1) (Serial debug)' --class projectceladon {" >> /scratchpad/boot/grub/grub.cfg
+		pure_cmdline=`echo $cmdline | sed 's| console=ttyS[^ ]*||g; s| console=tty0||g; s| ignore_loglevel||g; s| printk\.devkmsg=on||g; s| quite||g'`
+		echo "  linux /kernel $pure_cmdline ignore_loglevel printk.devkmsg=on debug SERIAL_PORT" >> /scratchpad/boot/grub/grub.cfg
 		echo "  initrd /ramdisk.img" >> /scratchpad/boot/grub/grub.cfg
 		echo "}" >> /scratchpad/boot/grub/grub.cfg
 	fi
