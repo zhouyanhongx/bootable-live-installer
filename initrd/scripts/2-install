@@ -433,20 +433,20 @@ do_actual_install()
 	echo "set timeout=10" > /scratchpad/boot/grub/grub.cfg
 
 	if [ $install_kf -eq 1 ]; then
-		cp -dprf /mnt/kernelflinger.efi /scratchpad
+		cp -dprf /mnt/kernelflinger.efi /scratchpad/EFI/BOOT/
 
 		echo "Add the menu for kernelflinger to GRUB"
 		echo "menuentry 'PROJECTCELADON Kernelflinger' --class projectceladon {" >> /scratchpad/boot/grub/grub.cfg
 		echo "	insmod part_gpt" >> /scratchpad/boot/grub/grub.cfg
 		echo "	insmod chain" >> /scratchpad/boot/grub/grub.cfg
-		echo "	chainloader /kernelflinger.efi" >> /scratchpad/boot/grub/grub.cfg
+		echo "	chainloader /EFI/BOOT/kernelflinger.efi" >> /scratchpad/boot/grub/grub.cfg
 		echo "}" >> /scratchpad/boot/grub/grub.cfg
 		echo "" >> /scratchpad/boot/grub/grub.cfg
 
 		echo "menuentry 'PROJECTCELADON Kernelflinger Fastboot' --class projectceladon {" >> /scratchpad/boot/grub/grub.cfg
 		echo "	insmod part_gpt" >> /scratchpad/boot/grub/grub.cfg
 		echo "	insmod chain" >> /scratchpad/boot/grub/grub.cfg
-		echo "	chainloader /kernelflinger.efi -f" >> /scratchpad/boot/grub/grub.cfg
+		echo "	chainloader /EFI/BOOT/kernelflinger.efi -f" >> /scratchpad/boot/grub/grub.cfg
 		echo "}" >> /scratchpad/boot/grub/grub.cfg
 		echo "" >> /scratchpad/boot/grub/grub.cfg
 	fi
@@ -532,7 +532,7 @@ do_actual_install()
 	fi
 
 	# Install Android Vendor
-	echo "Copy vendor partition ... $vendor"
+	echo "Copy vendor partition ... to $vendor"
 	do_dd_copyfile /tmp/vendor-sq/vendor.unsparse $vendor
 	if [ "$vendor_b" != "" ]; then
 		echo "Copy vendor_b partition ... $vendor_b"
