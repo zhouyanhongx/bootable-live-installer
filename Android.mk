@@ -26,12 +26,11 @@ UNSPARSER := $(HOST_OUT_EXECUTABLES)/simg2img
 SQUASHER := $(HOST_OUT_EXECUTABLES)/mksquashfs
 include $(BUILD_HOST_EXECUTABLE)
 
+GRUB_DEFAULT := 0
 ifeq ($(CI_BUILD),true)
 GRUB_TIMEOUT := 1
-GRUB_DEFAULT := 2
 else
 GRUB_TIMEOUT := 10
-GRUB_DEFAULT := 0
 endif
 
 BDATE ?= $(shell date +"%F")
