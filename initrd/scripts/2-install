@@ -206,8 +206,8 @@ prepare_partition()
 	dd if=/dev/zero of=/dev/$device bs=512 count=2048
 
 	part_prefix=""
-	ismmc=`echo $device | grep mmcblk`
-	if [ -n "$ismmc" ]; then
+	issd=`echo $device | grep sd[a-z]`
+	if [ -z "$issd" ]; then
 		part_prefix="p"
 	fi
 
