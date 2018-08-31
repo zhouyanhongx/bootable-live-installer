@@ -88,7 +88,7 @@ $(PROJECT_CELADON-EFI): $(GRUB_FILES) | $(install_mbr)
 	blksize=$$(($$(($$blksize + 64)) * 1024));	\
 	rm -f $@.fat; mkdosfs -n PROJECTCELADON -C $@.fat $$blksize
 	mcopy -Qsi $@.fat $(BOOT_DIR)/* $^ ::
-	sed "s|KERNEL_CMDLINE|$(BOARD_KERNEL_CMDLINE)|; s|BUILDDATE|$(BDATE)|; s|GRUB_DEFAULT|$(GRUB_DEFAULT)|; s|GRUB_TIMEOUT|$(GRUB_TIMEOUT)|; s|console=tty[^ ]* ||g; s|SERIAL_PORT|$(SERIAL_PARAMETER)|g; s|CONSOLE|console=tty0|g" $(SRC_GRUBCFG) > $(@D)/grub.cfg
+	sed "s|KERNEL_CMDLINE|$(BOARD_KERNEL_CMDLINE)|; s|BUILDDATE|$(BDATE)|; s|GRUB_DEFAULT|$(GRUB_DEFAULT)|; s|GRUB_TIMEOUT|$(GRUB_TIMEOUT)|; s|console=tty[^ ]* ||g; s|SERIAL_PORT|$(SERIAL_PARAMETER)|g; s|CONSOLE|console=tty0|g; s|memmap=[^ ]*||g" $(SRC_GRUBCFG) > $(@D)/grub.cfg
 	mcopy -Qoi $@.fat $(@D)/grub.cfg ::boot/grub
 	cat /dev/null > $@; $(install_mbr) -l $(DISK_LAYOUT) -i $@ oand=$@.fat
 	rm -f $@.fat
