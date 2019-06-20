@@ -12,10 +12,11 @@ function gpt_parse_section() {
 
 function gpt_get_section_field() {
 	if [ $2 == "partitions" ]; then
-		field=`echo $1 | sed -r 's/[[:alnum:]]+=/\n&/g' | awk -F= '$1=="'$2'"{print $2}'| awk '{print substr($0, 2, length($0) - 3)}'`
+		field=`echo $1 | sed -r 's/[[:alnum:]]+=/\n&/g' | awk -F= '$1=="'$2'"{print $2}'| sed 's/\"//g'`
+		field_add=`echo $1 | sed -r 's/\ +\+=/\+=/g' | sed -r 's/[[:alnum:]_\+]*\=[[:alnum:]]*/\n&/g' | awk -F+ '$1=="'$2'"{print $2}' | sed 's/[=\"]//g' | xargs -x`
+		echo $field $field_add
 	else
-		field=`echo $1 | sed -r 's/[[:alnum:]_]+=/\n&/g' | awk -F= '$1=="'$2'"{print $2}'| awk '{print substr($0, 2, length($0) - 3)}'`
+		field=`echo $1 | sed -r 's/[[:alnum:]_]+=/\n&/g' | awk -F= '$1=="'$2'"{print $2}'| sed 's/\"//g'`
+		echo $field
 	fi
-
-	echo $field
 }

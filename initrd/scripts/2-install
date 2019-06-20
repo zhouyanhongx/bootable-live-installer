@@ -215,6 +215,9 @@ prepare_partition()
 	gpt_file="gpt.$product.ini"
 	section=$(gpt_parse_section $gpt_file base)
 	partitions=$(gpt_get_section_field "$section" partitions)
+	# Adjust the data partition to the last one
+	partitions=`echo $partitions | sed 's/ data//'`
+	partitions=`echo $partitions data`
 	echo "partitions: $partitions"
 
 	# Clear the partition table and recompute CHS
