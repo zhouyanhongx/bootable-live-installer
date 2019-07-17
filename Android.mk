@@ -38,6 +38,12 @@ TARGET_INITRD_DIR := $(PRODUCT_OUT)/initrd
 LOCAL_INITRD_DIR := $(LOCAL_PATH)/initrd
 BOOT_DIR := $(LOCAL_PATH)/boot
 INITRD := $(PRODUCT_OUT)/initrd.img
+
+SERIAL = ttyUSB0
+ifeq ($(findstring $(SERIAL),$(SERIAL_PARAMETER)),$(SERIAL))
+SERIAL_PARAMETER := console=ttyS0,115200n8
+endif
+
 $(INITRD): $(LOCAL_PATH)/initrd/init $(wildcard $(LOCAL_PATH)/initrd/*/*) | $(MKBOOTFS)
 	rm -rf $(TARGET_INITRD_DIR)
 	$(ACP) -dprf $(LOCAL_INITRD_DIR) $(TARGET_INITRD_DIR)
